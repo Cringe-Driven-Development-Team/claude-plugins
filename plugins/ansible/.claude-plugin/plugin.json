@@ -1,0 +1,8 @@
+{
+  "name": "ansible",
+  "version": "1.0.0",
+  "description": "Ansible: ревью ролей и плейбуков по Red Hat CoP good practices. Скилл из leogallego/claude-ansible-skills, см. upstream.json.",
+  "author": {
+    "name": "Cringe-Driven-Development-Team"
+  }
+}

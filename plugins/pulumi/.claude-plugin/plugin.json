@@ -1,0 +1,8 @@
+{
+  "name": "pulumi",
+  "version": "1.0.0",
+  "description": "Pulumi: лучшие практики, ComponentResource, разбор упавших операций, обновление провайдеров, работа с CLI и стейтом. Скиллы из pulumi/agent-skills и dirien/claude-skills, см. upstream.json.",
+  "author": {
+    "name": "Cringe-Driven-Development-Team"
+  }
+}

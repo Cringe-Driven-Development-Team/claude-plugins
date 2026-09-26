@@ -1,0 +1,21 @@
+{
+  "name": "cdd",
+  "owner": {
+    "name": "Cringe-Driven-Development-Team"
+  },
+  "metadata": {
+    "description": "Плагины Claude Code организации Cringe-Driven-Development-Team: отобранные скиллы из апстримов и свои"
+  },
+  "plugins": [
+    {
+      "name": "pulumi",
+      "source": "./plugins/pulumi",
+      "description": "Pulumi: лучшие практики, ComponentResource, разбор упавших операций, обновление провайдеров, работа с CLI и стейтом"
+    },
+    {
+      "name": "ansible",
+      "source": "./plugins/ansible",
+      "description": "Ansible: ревью ролей и плейбуков по Red Hat CoP good practices"
+    }
+  ]
+}
