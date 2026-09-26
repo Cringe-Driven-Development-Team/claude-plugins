@@ -16,6 +16,11 @@
       "name": "ansible",
       "source": "./plugins/ansible",
       "description": "Ansible: ревью ролей и плейбуков по Red Hat CoP good practices"
+    },
+    {
+      "name": "selectel-ops",
+      "source": "./plugins/selectel-ops",
+      "description": "Selectel: доступ и роли, токены, проекты, флейворы, DNS, S3, диагностика ошибок, стык с Pulumi и Ansible"
     }
   ]
 }

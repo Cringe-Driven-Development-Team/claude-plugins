@@ -1,0 +1,7 @@
+{
+  "name": "selectel-ops",
+  "description": "Работа с облаком Selectel: доступ, проекты, флейворы, DNS, S3, диагностика, стык с Pulumi и Ansible. Собственный плагин организации.",
+  "author": {
+    "name": "Cringe-Driven-Development-Team"
+  }
+}
