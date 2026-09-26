@@ -91,7 +91,7 @@ DNS v2 отвечает 401.
   создать нельзя — одна зона на имя в аккаунте.
 - Для поддомена в чужой зоне — rrset создаётся с `projectId` того проекта, где зона; для своего
   домена — своя зона в своём проекте плюс делегирование у регистратора домена на серверы имён
-  `a.ns.selectel.ru`, `b.ns.selectel.ru`, `c.ns.selectel.ru`.
+  `a.ns.selectel.ru`, `b.ns.selectel.ru`, `c.ns.selectel.ru`, `d.ns.selectel.ru`.
 - API периодически (наблюдался флап на 15–20 минут) отвечает `500` HTML-страницей nginx на любой
   запрос с любым токеном, затем восстанавливается само. У Pulumi это выглядит как ошибка
   `invalid character '<' looking for beginning of value` на `getDomainsZoneV2`/`DomainsRrsetV2` —
