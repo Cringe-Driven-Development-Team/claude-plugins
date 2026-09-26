@@ -39,7 +39,7 @@ description: Работа с облаком Selectel через API, openstack C
 
 | Задача | Инструмент |
 |---|---|
-| флейвор, образ, тип диска, внешняя сеть | `openstack --os-cloud <имя> ...` внутри любого проекта аккаунта (REFERENCE §4) |
+| флейвор, образ, тип диска, внешняя сеть | `openstack --os-cloud <имя> ...` или без `--os-cloud` при заданных `OS_*` (`OS_USERNAME`, `OS_PASSWORD`, `OS_USER_DOMAIN_NAME`/`OS_PROJECT_DOMAIN_NAME` = номер аккаунта, `OS_PROJECT_NAME`, `OS_AUTH_URL`, `OS_REGION_NAME`, `OS_IDENTITY_API_VERSION=3`) внутри любого проекта аккаунта (REFERENCE §4) |
 | список проектов и их id | `python3 scripts/selectel.py --cloud <имя> projects` |
 | токен для `curl` | `python3 scripts/selectel.py token [--scope project]` или `openstack token issue -f value -c id` |
 | создать проект, проектного пользователя, keypair | IaC (Pulumi, REFERENCE §6) или панель |
