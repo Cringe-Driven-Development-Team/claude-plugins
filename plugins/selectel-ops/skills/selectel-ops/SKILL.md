@@ -47,6 +47,7 @@ description: Работа с облаком Selectel через API, openstack C
 | первый сервисный пользователь аккаунта и его роли | только панель |
 | сервер не отвечает по ssh | консоль сервера в панели |
 | S3: ключ, бакет, стейт Pulumi | раздел «Selectel S3», REFERENCE §9 |
+| переименовать проект, разложить проекты | REFERENCE §10 |
 
 ## Фаза 0 — pre-flight
 
@@ -180,6 +181,7 @@ openstack --os-cloud <имя> network list --external
 | образ не найден по имени | имя посимвольно из `image list --public`, `visibility: public` | сверить через `image list --public` |
 | пустой `ansible-inventory --graph` | не тот `project_id` или нет `metadata.role` | сверить `clouds.yaml` и metadata сервера |
 | смена порта ssh не действует | `ssh.socket` игнорирует `Port` (Ubuntu ≥ 22.10) | отключить socket-активацию |
+| нужно перенести DNS-зону в другой проект | удаление+создание даёт простой | «Перенести в другой проект» в панели (записи и id сохраняются), затем импорт в Pulumi — REFERENCE §3 |
 
 Полная таблица с текстами ошибок — REFERENCE §5.
 
