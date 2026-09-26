@@ -1,6 +1,6 @@
 ---
 name: selectel-ops
-description: Работа с облаком Selectel через API, openstack CLI и панель — модель доступа и роли сервисных пользователей, токены нужного scope, проекты, флейворы, образы, типы дисков, внешние сети, DNS v2, диагностика 401/403/409/500, проверенные особенности стыка с Pulumi (terraform-provider-selectel, @pulumi/selectel) и Ansible (clouds.yaml, dynamic inventory openstack.cloud). Активируется при упоминании Selectel, селектел, selcloud, cloud.api.selcloud.ru, api.selectel.ru, clouds.yaml, сервисный пользователь Selectel, облачный проект, флейвор, floating IP, DNS Selectel, terraform-provider-selectel, @pulumi/selectel, openstack.cloud inventory.
+description: Работа с облаком Selectel через API, openstack CLI и панель — модель доступа и роли сервисных пользователей, токены нужного scope, проекты, флейворы, образы, типы дисков, внешние сети, DNS v2, S3 (ключи, инициализация проекта, бакет и стейт Pulumi), диагностика 401/403/409/500, проверенные особенности стыка с Pulumi (terraform-provider-selectel, @pulumi/selectel) и Ansible (clouds.yaml, dynamic inventory openstack.cloud). Активируется при упоминании Selectel, селектел, selcloud, cloud.api.selcloud.ru, api.selectel.ru, clouds.yaml, сервисный пользователь Selectel, облачный проект, флейвор, floating IP, DNS Selectel, S3 Selectel, storage.selcloud.ru, бакет стейта Pulumi, terraform-provider-selectel, @pulumi/selectel, openstack.cloud inventory.
 ---
 
 # Selectel Ops
@@ -46,6 +46,7 @@ description: Работа с облаком Selectel через API, openstack C
 | DNS-запись | IaC или `curl` к DNS v2 (REFERENCE §3) |
 | первый сервисный пользователь аккаунта и его роли | только панель |
 | сервер не отвечает по ssh | консоль сервера в панели |
+| S3: ключ, бакет, стейт Pulumi | раздел «Selectel S3», REFERENCE §9 |
 
 ## Фаза 0 — pre-flight
 
@@ -148,6 +149,20 @@ openstack --os-cloud <имя> network list --external
 сервера (`keyed_groups`). Нужны пакет `openstacksdk` и коллекция `openstack.cloud`. Первая
 проверка нового inventory — `ansible-inventory --graph`; пустой вывод — см. таблицу ниже.
 Шаблоны файлов — REFERENCE §7.
+
+## Selectel S3
+
+- Эндпоинт `https://s3.<пул>.storage.selcloud.ru`, регион подписи = пул, path-style.
+- Ключ = пользователь + проект; секрет виден только при создании (IAM API
+  `POST /iam/v1/service_users/<id>/credentials`). Новый ключ сначала даёт `InvalidAccessKeyId` —
+  ждать `200` на `ListBuckets`.
+- Новый проект: `POST https://api.<пул>.storage.selcloud.ru/v2/hello/init` с project-токеном,
+  идемпотентно.
+- Pulumi: `aws.Provider` с `s3UsePathStyle` и `skip*`; `accessKey` у `IamS3CredentialsV1` —
+  секрет, выводить с `--show-secrets`; изолировать `~/.aws` (`AWS_CONFIG_FILE=/dev/null`).
+- Бакет стейта — в отдельном bootstrap-стеке; у людей личные S3-ключи на проект стейта.
+
+Детали, команды и `pulumi login` для S3 — REFERENCE §9.
 
 ## Когда что-то не получается
 

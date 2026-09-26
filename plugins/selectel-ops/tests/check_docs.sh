@@ -6,12 +6,14 @@ fail=0
 need() { grep -qF -- "$2" "$1" || { echo "нет в $1: $2"; fail=1; }; }
 
 for h in "## 1. Карта эндпоинтов" "## 2. Токены Keystone" "## 3. DNS v2" "## 4. Имена сущностей" \
-         "## 5. Таблица ошибок" "## 6. Pulumi" "## 7. Ansible" "## 8. Скрипт selectel.py"; do
+         "## 5. Таблица ошибок" "## 6. Pulumi" "## 7. Ansible" "## 8. Скрипт selectel.py" "## 9. S3"; do
   need REFERENCE.md "$h"
 done
 for s in "X-Subject-Token" "vpc/resell/v2/projects" "domains/v2/zones" "external-network" \
          "ExternalGatewayForFloatingIPNotFound" "invalid character '<'" "user_domain_name" \
-         "keyed_groups" "getFlavorOutput" "DomainsRrsetV2" "dependsOn"; do
+         "keyed_groups" "getFlavorOutput" "DomainsRrsetV2" "dependsOn" \
+         "hello/init" "InvalidAccessKeyId" "iam/v1/service_users" "ca_bundle" "--show-secrets" \
+         "s3ForcePathStyle" "s3UsePathStyle" "BucketVersioning"; do
   need REFERENCE.md "$s"
 done
 
@@ -20,7 +22,7 @@ need SKILL.md "name: selectel-ops"
 need SKILL.md "description:"
 for h in "## Чего ты никогда не делаешь" "## Модель доступа за минуту" "## Куда идти с какой задачей" \
          "## Фаза 0" "## Процедуры" "## Только в панели" "## Selectel в Pulumi" "## Selectel в Ansible" \
-         "## Когда что-то не получается" "## Что отдавать наружу"; do
+         "## Selectel S3" "## Когда что-то не получается" "## Что отдавать наружу"; do
   need SKILL.md "$h"
 done
 lines=$(wc -l < SKILL.md)

@@ -346,3 +346,71 @@ dnsv2  ru-1    public     https://api.selectel.ru/domains/v2
 HTML, код N»; таймаут запроса — 20 с. Коды выхода: `0` — успех, `1` — проверка не прошла или API
 ответил ошибкой, `2` — ошибка использования или конфигурации. Глобальные опции `--cloud`,
 `--clouds-file`, `--json` принимаются и до, и после подкоманды.
+
+## 9. S3
+
+Эндпоинт S3 — `https://s3.<POOL>.storage.selcloud.ru` (например `ru-7`), регион подписи SigV4 =
+пул. Адресация — path-style. Сертификаты S3 доверены системным хранилищем Linux; отдельный
+корневой сертификат Selectel не нужен (для snap-awscli — `AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt`).
+
+### Ключи
+
+- S3-ключ привязан к паре «пользователь + проект» и видит все бакеты этого проекта в рамках ролей
+  пользователя (`member` на проект или на аккаунт). Бакеты других проектов этим ключом не видны
+  (`NoSuchBucket`).
+- Секрет показывается только в ответе на создание — ни панель, ни API его потом не отдают.
+- Выпуск через IAM API (domain-токен, пользователь с `iam.admin` или сам себе):
+
+  ```bash
+  curl -sS -X POST "https://api.selectel.ru/iam/v1/service_users/<USER_ID>/credentials" \
+    -H "X-Auth-Token: <TOKEN>" -H 'Content-Type: application/json' \
+    --data-raw '{"name": "<ИМЯ_КЛЮЧА>", "project_id": "<PROJECT_ID>"}'
+  # ответ: {"name", "project_id", "access_key", "secret_key"}
+  ```
+
+  Список ключей — `GET` на тот же адрес (без `secret_key`). id пользователя — из
+  `GET https://api.selectel.ru/iam/v1/service_users` по имени.
+- Новый ключ S3 принимает не сразу: сначала `403 InvalidAccessKeyId` на любой запрос, обычно
+  секунды, иногда минуты. Перед использованием — опрашивать `ListBuckets` этим ключом до `200`.
+
+### Инициализация S3 в проекте
+
+Пока в проекте не создан ни один бакет через панель, S3 не знает проект и отвечает
+`InvalidAccessKeyId` на любой его ключ. Через API — `POST` с project-токеном:
+
+```bash
+curl -sS -X POST "https://api.<POOL>.storage.selcloud.ru/v2/hello/init" -H "X-Auth-Token: <PROJECT_TOKEN>"
+```
+
+Идемпотентно: повторный вызов на инициализированном проекте отвечает `200` с пустым телом.
+
+### Pulumi
+
+- Бакет — `@pulumi/aws` с явным `aws.Provider`: `region: <POOL>`, `endpoints: [{ s3: <эндпоинт> }]`,
+  `s3UsePathStyle: true`, `skipCredentialsValidation`, `skipRegionValidation`,
+  `skipRequestingAccountId`, `skipMetadataApiCheck` — всё `true`. Версионирование —
+  `aws.s3.BucketVersioning` (aws 7.x) с `versioningConfiguration: { status: "Enabled" }`.
+- `selectel.IamS3CredentialsV1` помечает секретом и `accessKey`, и `secretKey`:
+  `pulumi stack output <имя> --show-secrets` для обоих, иначе выводится строка `[secret]`
+  (8 символов) — S3 ответит `InvalidAccessKeyId`.
+- Провайдер AWS и `pulumi login s3://` — Go (AWS SDK v2): читают `~/.aws/config` и
+  `~/.aws/credentials`. Строка `ca_bundle = ~/...` там ломает их (`~` не раскрывается:
+  `open ~/...: no such file or directory`), а профиль `default` может подсунуть чужие ключи. Для
+  работы с Selectel — `AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null` и явные
+  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`.
+- DIY-backend стейта в S3 Selectel:
+
+  ```bash
+  pulumi login "s3://<BUCKET>/<ПРЕФИКС>?region=<POOL>&endpoint=s3.<POOL>.storage.selcloud.ru&s3ForcePathStyle=true"
+  ```
+
+  Префикс в пути (`/main`, `/bootstrap`) разделяет стейты разных проектов в одном бакете.
+  Предупреждение `Response has no supported checksum` — норма: S3 Selectel не возвращает
+  контрольные суммы.
+- Бакет стейта нельзя создать в стеке, чей стейт в нём хранится: он выносится в отдельный
+  bootstrap-стек, собственный стейт которого после первого `up` переносится в тот же бакет
+  (`pulumi stack export --show-secrets` → `login` → `stack init` → `stack import`). Ключи доступа к
+  стейту не должны существовать только внутри этого стейта — у людей личные S3-ключи на проект
+  стейта.
+- При версионировании удалённый объект оставляет версии и delete marker; убрать полностью —
+  `s3api list-object-versions` + `delete-object --version-id`.

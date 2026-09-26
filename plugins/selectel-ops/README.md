@@ -39,7 +39,8 @@ python3 ~/.claude/plugins/marketplaces/cdd/plugins/selectel-ops/skills/selectel-
 ## Чего скилл не делает
 
 Не пишет в облако (создание и удаление — через Pulumi или руками в панели), не автоматизирует
-панель через браузер, не покрывает S3, Managed Kubernetes, DBaaS и биллинг.
+панель через браузер, не покрывает Managed Kubernetes, DBaaS и биллинг. S3 — справочно (REFERENCE §9): ключи,
+инициализация проекта, бакеты и стейт Pulumi.
 
 ## Installation
 
