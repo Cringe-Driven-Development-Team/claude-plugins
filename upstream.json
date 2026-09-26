@@ -1,0 +1,32 @@
+{
+  "sources": {
+    "pulumi-agent-skills": {
+      "repo": "pulumi/agent-skills",
+      "commit": "9b794aec9c4169f137285c2763c06064d247dd47",
+      "license": "LICENSE"
+    },
+    "dirien": {
+      "repo": "dirien/claude-skills",
+      "commit": "22aaf94d59d53c88a5465bcb5434d309fae8787a",
+      "license": "LICENSE"
+    },
+    "ansible-skills": {
+      "repo": "leogallego/claude-ansible-skills",
+      "commit": "2c43de8f4b180342f05f5e670cc7e6e8ae359ec4",
+      "license": "LICENSE"
+    }
+  },
+  "skills": [
+    { "plugin": "pulumi", "source": "pulumi-agent-skills", "path": "pulumi/skills/pulumi-best-practices" },
+    { "plugin": "pulumi", "source": "pulumi-agent-skills", "path": "pulumi/skills/pulumi-component" },
+    { "plugin": "pulumi", "source": "pulumi-agent-skills", "path": "pulumi/skills/pulumi-debug-failed-operation" },
+    { "plugin": "pulumi", "source": "pulumi-agent-skills", "path": "pulumi/skills/provider-upgrade" },
+    { "plugin": "pulumi", "source": "dirien", "path": "pulumi-cli" },
+    {
+      "plugin": "ansible",
+      "source": "ansible-skills",
+      "path": "ansible-good-practices/skills/ansible-good-practices",
+      "pluginFiles": [ { "from": "ansible-good-practices/references", "to": "references" } ]
+    }
+  ]
+}
