@@ -20,6 +20,7 @@ for s in "X-Subject-Token" "vpc/resell/v2/projects" "domains/v2/zones" "external
   need REFERENCE.md "$s"
 done
 
+need REFERENCE.md "на время \`pulumi preview\` и \`pulumi up\`"
 [ -f SKILL.md ] || { echo "нет SKILL.md"; fail=1; }
 need SKILL.md "name: selectel-ops"
 need SKILL.md "description:"

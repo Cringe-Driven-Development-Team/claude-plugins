@@ -25,6 +25,8 @@ done
 for s in "isDryRun" "deleteBeforeReplace" "--show-secrets" "file://" "setMocks" "import" "selectel-ops"; do
   need SKILL.md "$s"
 done
+# SDK генерируется только в sdks/<имя> — не отправлять читателя в несуществующий каталог
+! grep -qF "и/или \`.pulumi/\`" REFERENCE.md || { echo "REFERENCE.md: неподтверждённая оговорка про .pulumi/"; fail=1; }
 lines=$(wc -l < SKILL.md)
 [ "$lines" -le 230 ] || { echo "SKILL.md длиннее 230 строк: $lines"; fail=1; }
 

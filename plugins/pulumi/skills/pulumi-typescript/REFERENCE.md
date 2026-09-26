@@ -24,8 +24,7 @@ packages:
 ```
 
 `packages.<имя>.source: terraform-provider` — provider-bridge: Pulumi собирает SDK из провайдера
-Terraform. `pulumi install` генерирует пакет в `sdks/<имя>` (и/или `.pulumi/`, в зависимости от
-версии CLI) — каталог невоспроизводим детерминированно между машинами и идёт в `.gitignore` вместе с
+Terraform. `pulumi install` генерирует пакет в `sdks/<имя>` — каталог невоспроизводим детерминированно между машинами и идёт в `.gitignore` вместе с
 `node_modules/`:
 
 ```
@@ -131,7 +130,9 @@ pulumi.runtime.setMocks(
   {
     newResource(args) {
       created.set(args.name, { type: args.type, inputs: args.inputs });
-      return { id: args.id || `${args.name}-id`, state: { ...args.inputs, accessKey: "AK" } };
+      // в preview выход без значения из моков — unknown: apply по нему не вызывается и ожидание в
+      // beforeAll зависнет. Выходы, которых ждёт тест, должны получить значения здесь.
+      return { id: args.id || `${args.name}-id`, state: { ...args.inputs, accessKey: "AK", secretKey: "SK" } };
     },
     call: (args) => args.inputs,
   },
@@ -147,8 +148,9 @@ const value = <T>(o: pulumi.Output<T>) =>
 
 beforeAll(async () => {
   stack = await import("./index"); // импорт модуля выполняет тело программы один раз
-  await value(stack.stateSecretKey); // регистрация мок-ресурсов асинхронна: без ожидания хотя бы
-  // одного выхода стека created.get(...) в первом же тесте ниже ещё может быть пуст
+  // регистрация мок-ресурсов асинхронна: без ожидания выходов created.get(...) в первом тесте может
+  // быть пуст. Ждите выходы, которые зависят от проверяемых ресурсов (надёжнее — все выходы стека).
+  await Promise.all([value(stack.stateSecretKey), value(stack.versioningStatus), value(stack.stateProjectId)]);
 });
 
 describe("стек", () => {

@@ -1,6 +1,6 @@
 {
   "name": "pulumi",
-  "description": "Pulumi: лучшие практики, ComponentResource, разбор упавших операций, обновление провайдеров, работа с CLI и стейтом. Скиллы из pulumi/agent-skills и dirien/claude-skills, см. upstream.json.; собственный скилл pulumi-typescript — TypeScript/bun, S3-backend, тесты на моках",
+  "description": "Pulumi: лучшие практики, ComponentResource, разбор упавших операций, обновление провайдеров, работа с CLI и стейтом. Скиллы из pulumi/agent-skills и dirien/claude-skills, см. upstream.json; собственный скилл pulumi-typescript — TypeScript/bun, S3-backend, тесты на моках",
   "author": {
     "name": "Cringe-Driven-Development-Team"
   }
