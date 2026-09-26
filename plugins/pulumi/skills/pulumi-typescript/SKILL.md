@@ -1,6 +1,6 @@
 ---
 name: pulumi-typescript
-description: Pulumi-программы на TypeScript в репозиториях организации — bun, terraform-bridged провайдеры (packages в Pulumi.yaml, sdks/), DIY-backend стейта в S3, секреты через passphrase, тесты на моках (bun test, setMocks), побочные эффекты под isDryRun, protect/deleteBeforeReplace/import/aliases, перенос стейта между backend, импорт существующих ресурсов, bootstrap-стек. Активируется при работе с pulumi/ и pulumi/bootstrap/ в репо организации, Pulumi.yaml с packagemanager bun, pulumi login s3://, pulumi stack export/import, pulumi import. Общие вопросы про Output и компоненты — pulumi-best-practices, операции CLI в целом — pulumi-cli, всё про Selectel — selectel-ops.
+description: Pulumi-программы на TypeScript в репозиториях организации — bun, terraform-bridged провайдеры (packages в Pulumi.yaml, sdks/), DIY-backend стейта в S3, секреты через passphrase, тесты на моках (bun test, setMocks), побочные эффекты под isDryRun, protect/deleteBeforeReplace/import/aliases, перенос стейта между backend, импорт существующих ресурсов, bootstrap-стек. Активируется в каталогах pulumi/ и pulumi/bootstrap/ репозиториев организации: Pulumi.yaml с packagemanager: bun, terraform-bridged провайдеры, DIY S3-backend организации (свой bucket/prefix на стек в Selectel S3) — не по голым командам `pulumi login s3://`, `pulumi stack export/import` или `pulumi import` самим по себе, они общие для любого Pulumi-проекта. Общие вопросы про Output и компоненты — pulumi-best-practices, операции CLI в целом (включая перенос стейта и импорт ресурсов вне контекста этой организации) — pulumi-cli, всё про Selectel — selectel-ops.
 ---
 
 # Pulumi TypeScript в организации
@@ -18,7 +18,8 @@ description: Pulumi-программы на TypeScript в репозитория
 
 1. Не печатаешь секреты в argv, логах или тексте ошибок — только через stdin процесса или
    `pulumi.secret`; чувствительный вывод стека — `stack output --show-secrets`, не догадки по логу.
-2. Не запускаешь `up`, `destroy` или `state delete` без показанного пользователю `preview` и явного
+2. Не запускаешь `up`, `destroy`, `state delete` или `stack rm` без показанного пользователю
+   `preview`/плана (для `stack rm` — списка ресурсов в стеке, подтверждающего, что он пуст) и явного
    «да» на него в этой сессии.
 3. Не меняешь логическое имя ресурса, чтобы просто переименовать его отображаемое имя — логическое
    имя пересоздаёт ресурс; для переименования — `aliases` (REFERENCE §3).
@@ -64,7 +65,7 @@ bootstrap-стек для самого бакета стейта — REFERENCE �
 
 | Симптом | Причина | Действие |
 |---|---|---|
-| `pulumi login file://…` + `stack init` → стек оказался в Pulumi Cloud (временный агентский аккаунт) | каталога нет, `login` упал, CLI откатился на Cloud | удалить стек (`stack rm`), `logout`, `mkdir -p` каталога, повторить `login` |
+| `pulumi login file://…` + `stack init` → стек оказался в Pulumi Cloud | каталога нет, `login` упал, CLI без backend'а создал временный аккаунт Pulumi Cloud | `logout`; если стек пуст — удалить его (`stack rm`) после подтверждения человека; `mkdir -p` каталога, повторить `login` |
 | `stack output X` выводит `[secret]` (8 символов) | выход секретный (у terraform-bridged провайдеров секретом бывает и access key) | `pulumi stack output X --show-secrets` |
 | `open ~/...: no such file or directory` у AWS-провайдера / `pulumi login s3://` | Go SDK читает `~/.aws/config`, `ca_bundle` с `~` не раскрывается | `AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null` |
 | замена сервера падает на занятом порте/диске | create-before-delete по умолчанию | `deleteBeforeReplace: true` |

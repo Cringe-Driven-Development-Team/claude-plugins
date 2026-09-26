@@ -147,6 +147,8 @@ const value = <T>(o: pulumi.Output<T>) =>
 
 beforeAll(async () => {
   stack = await import("./index"); // импорт модуля выполняет тело программы один раз
+  await value(stack.stateSecretKey); // регистрация мок-ресурсов асинхронна: без ожидания хотя бы
+  // одного выхода стека created.get(...) в первом же тесте ниже ещё может быть пуст
 });
 
 describe("стек", () => {
@@ -214,18 +216,26 @@ pulumi stack export --show-secrets --file state.json   # секреты в фа�
 
 # новый backend
 pulumi login "s3://<bucket>/<prefix>?region=<region>&endpoint=<endpoint>&s3ForcePathStyle=true"
-pulumi stack init <имя> --secrets-provider passphrase
+pulumi stack init <имя> --secrets-provider passphrase   # та же PULUMI_CONFIG_PASSPHRASE, что была у
+                                                         # старого стека — иначе secure-значения в
+                                                         # Pulumi.<stack>.yaml не расшифруются
 pulumi stack import --file state.json
 pulumi preview                                          # ожидается: без изменений
 
 # только после того, как ключи доступа к новому backend сохранены отдельно от стейта:
 rm state.json
-# и вывести из эксплуатации старый backend/стейт
+# старый backend/стейт выводятся из эксплуатации только после того, как `pulumi preview` на новом
+# backend подтвердил отсутствие изменений И человек явно подтвердил («да») это решение
 ```
 
 `preview` без изменений после `stack import` — единственное надёжное подтверждение, что перенос не
 потерял и не исказил ресурсы. Файл экспорта с `--show-secrets` — открытый текст: удалять его можно
 только после того, как ключи доступа к новому backend уже сохранены не внутри самого стейта (§7).
+`stack init --secrets-provider passphrase` в новом backend должен использовать ту же passphrase, что и
+старый стек (`PULUMI_CONFIG_PASSPHRASE`) — иначе secure-значения в `Pulumi.<stack>.yaml` не
+расшифруются при импорте. Вывод старого backend (и его стейта) из эксплуатации — только после того,
+как `preview` на новом backend показал отсутствие изменений, и только после явного подтверждения
+человека, а не сразу по факту успешного `stack import`.
 
 Ловушка: `pulumi login file://<несуществующий каталог>` завершается ошибкой, но некоторые версии CLI
 после неё тихо используют Pulumi Cloud как backend по умолчанию — следующий `stack init` создаёт

@@ -54,8 +54,14 @@ git diff                   # прочитать, что изменилось в 
 мержа обновления приходят всем по `/plugin marketplace update cdd`. Скиллы апстримов руками не правим: следующий `sync.sh` затрёт правки.
 Нужна своя версия — отдельный скилл в том же плагине.
 
-Зависимости: `bash`, `git`, `jq`. Тесты: `bash tests/sync_test.sh && bash tests/manifest_test.sh && bash plugins/pulumi/tests/check_docs.sh && claude plugin eval plugins/pulumi --runs 1`;
+Зависимости: `bash`, `git`, `jq`. Тесты: `bash tests/sync_test.sh && bash tests/manifest_test.sh && bash plugins/pulumi/tests/check_docs.sh`;
 `selectel-ops` — `cd plugins/selectel-ops && python3 -m unittest discover -s tests -t . && bash tests/check_docs.sh`.
+
+Отдельно, не в этой цепочке: `claude plugin eval plugins/pulumi --runs 1` — оценка поведения скилла
+живыми вызовами модели, платно и недетерминированно, запускается вручную. Сейчас 2 из 3 сценариев
+(`state-migration`, `zone-import`) набирают одинаковый балл с плагином и без — они проверяют общие
+знания Pulumi, а не специфику организации; сценарии, чувствительные именно к содержимому скилла
+(org-specific), — доработка на будущее.
 
 ## Добавить скилл
 
