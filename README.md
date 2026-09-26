@@ -58,6 +58,9 @@ git diff                   # прочитать, что изменилось в 
   затем `scripts/sync.sh`. Если скилл читает файлы из корня своего плагина — `pluginFiles`
   (пример — `ansible-good-practices`).
 - **Свой:** `plugins/<плагин>/skills/<имя>/SKILL.md`. `sync.sh` его не трогает.
+- **Убрать или переименовать скилл из апстрима:** поправить `upstream.json` и удалить старый
+  `plugins/<плагин>/skills/<имя>/` руками — `sync.sh` сам ничего не удаляет, но предупреждает
+  о каталогах с лицензией апстрима, которых нет в `upstream.json`.
 - **Новый плагин:** `plugins/<плагин>/.claude-plugin/plugin.json` и запись в
   `.claude-plugin/marketplace.json`.
 

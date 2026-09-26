@@ -122,4 +122,20 @@ for rel in ${targets[@]+"${targets[@]}"}; do
   cp -R "$out/$rel" "$ROOT/plugins/$rel"
 done
 cp "$manifest" "$MANIFEST"
+
+# Каталог скилла вне upstream.json, но с лицензией одного из источников — скорее всего, остаток
+# после переименования или удаления записи. Свои скиллы (без такой лицензии) не трогаем и молчим.
+for skill in "$ROOT"/plugins/*/skills/*/; do
+  rel=${skill#"$ROOT/plugins/"}
+  rel=${rel%/}
+  case " ${targets[*]+${targets[*]}} " in *" $rel "*) continue ;; esac
+  [ -f "$skill/LICENSE" ] || continue
+  for src in $(jq -r '.sources | keys[]' "$manifest"); do
+    lic=$(source_field "$src" license)
+    if [ -f "$work/src/$src/${lic:-LICENSE}" ] && cmp -s "$skill/LICENSE" "$work/src/$src/${lic:-LICENSE}"; then
+      echo "sync: внимание: plugins/$rel нет в upstream.json, но лицензия как у источника '$src' — удалите каталог, если скилл больше не синхронизируется" >&2
+      break
+    fi
+  done
+done
 echo "sync: скиллов синхронизировано: $count"

@@ -121,6 +121,27 @@ test_leaves_unlisted_skills() {
   assert_eq "$(cat "$CASE/plugins/demo/skills/own/SKILL.md")" "mine" "свой скилл"
 }
 
+test_warns_on_orphaned_synced_skill() {
+  make_case "$(make_upstream)" "$demo_skill"
+  run_sync >/dev/null 2>&1 || fail "начальный sync упал"
+  mkdir -p "$UP/skills/renamed-skill"
+  cp "$UP/skills/demo-skill/SKILL.md" "$UP/skills/renamed-skill/SKILL.md"
+  jq --arg c "$(git_commit rename)" '.sources.acme.commit = $c | .skills[0].path = "skills/renamed-skill"' \
+    "$CASE/upstream.json" > "$CASE/upstream.json.new" && mv "$CASE/upstream.json.new" "$CASE/upstream.json"
+  local out
+  out=$(run_sync 2>&1) || fail "sync упал"
+  grep -q 'demo/skills/demo-skill' <<<"$out" || fail "нет предупреждения об осиротевшем скилле: $out"
+}
+
+test_no_warning_for_own_skill() {
+  make_case "$(make_upstream)" "$demo_skill"
+  mkdir -p "$CASE/plugins/demo/skills/own"
+  echo mine > "$CASE/plugins/demo/skills/own/SKILL.md"
+  local out
+  out=$(run_sync 2>&1) || fail "sync упал"
+  if grep -q 'skills/own' <<<"$out"; then fail "лишнее предупреждение о своём скилле: $out"; fi
+}
+
 test_replaces_stale_files() {
   make_case "$(make_upstream)" "$demo_skill"
   mkdir -p "$CASE/plugins/demo/skills/demo-skill"
