@@ -36,6 +36,7 @@
 | `pulumi` | `pulumi-debug-failed-operation` | pulumi/agent-skills | Apache-2.0 |
 | `pulumi` | `provider-upgrade` | pulumi/agent-skills | Apache-2.0 |
 | `pulumi` | `pulumi-cli` | [dirien/claude-skills](https://github.com/dirien/claude-skills) | MIT |
+| `pulumi` | `pulumi-typescript` | собственный (идеи — [dirien/claude-skills](https://github.com/dirien/claude-skills), текст свой) | MIT |
 | `ansible` | `ansible-good-practices` | [leogallego/claude-ansible-skills](https://github.com/leogallego/claude-ansible-skills) | GPL-3.0 |
 | `selectel-ops` | `selectel-ops` | собственный плагин организации (перенесён из YarikMix/claude-plugins) | MIT |
 
@@ -53,7 +54,7 @@ git diff                   # прочитать, что изменилось в 
 мержа обновления приходят всем по `/plugin marketplace update cdd`. Скиллы апстримов руками не правим: следующий `sync.sh` затрёт правки.
 Нужна своя версия — отдельный скилл в том же плагине.
 
-Зависимости: `bash`, `git`, `jq`. Тесты: `bash tests/sync_test.sh && bash tests/manifest_test.sh`;
+Зависимости: `bash`, `git`, `jq`. Тесты: `bash tests/sync_test.sh && bash tests/manifest_test.sh && bash plugins/pulumi/tests/check_docs.sh && claude plugin eval plugins/pulumi --runs 1`;
 `selectel-ops` — `cd plugins/selectel-ops && python3 -m unittest discover -s tests -t . && bash tests/check_docs.sh`.
 
 ## Добавить скилл
