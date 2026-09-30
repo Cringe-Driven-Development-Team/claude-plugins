@@ -129,12 +129,14 @@ openstack --os-cloud <имя> network list --external
    машине.
 2. `sdks/` — в `.gitignore`.
 3. `runtime.options.packagemanager` фиксировать явно — иначе выбор по lock-файлу может дать npm.
-4. Конфиг стека: `selectel:domainName`, `selectel:username`, `selectel:password` (`--secret`),
-   `selectel:authUrl`, `selectel:authRegion`.
+4. Конфиг стека: `selectel:domainName`, `selectel:authUrl`, `selectel:authRegion`. Логин и пароль —
+   не в конфиге, а из окружения (`OS_USERNAME`/`OS_PASSWORD`/`OS_DOMAIN_NAME`, их читает провайдер) —
+   у каждого свои; `OS_PROJECT_NAME` рядом с явным `tenantId` провайдера OpenStack ломает авторизацию.
 5. Ресурсы внутри проекта — провайдер `openstack` на кредах проектного пользователя (`authUrl`
    без завершающего слэша).
 6. Флейвор — `getFlavorOutput({ name })` по имени, не по id.
 7. `FloatingIpAssociate` — `dependsOn: [routerInterface]`, иначе `ExternalGatewayForFloatingIPNotFound`.
+   `pool` у `FloatingIp` — ForceNew: имя внешней сети из конфига, не из `getNetwork`.
 8. `ignoreChanges: ["imageId"]` на диске и сервере — ставить всегда.
 9. DNS: `getDomainsZoneV2Output` + `DomainsRrsetV2` с `projectId` чужой зоны, либо `DomainsZoneV2`
    для своего домена.
@@ -146,8 +148,11 @@ openstack --os-cloud <имя> network list --external
 ## Selectel в Ansible
 
 `clouds.yaml`: оба domain-поля (`user_domain_name`, `project_domain_name`) равны номеру
-аккаунта. Dynamic inventory `openstack.cloud.openstack` группирует хосты по `openstack.metadata`
-сервера (`keyed_groups`). Нужны пакет `openstacksdk` и коллекция `openstack.cloud`. Первая
+аккаунта; либо без файла — облако из `OS_*` с `OS_CLOUD_NAME=<имя>` (оба сразу нельзя). Dynamic
+inventory `openstack.cloud.openstack` группирует хосты по `openstack.metadata` сервера (`keyed_groups`
+или `groups:`). Нужны `openstacksdk` в том же python, что у Ansible (`pipx inject`), и коллекция
+`openstack.cloud`. Floating IP — 1:1 DNAT на приватный адрес сервера: порт Docker, опубликованный на
+приватном IP такого сервера, открыт в интернет. Первая
 проверка нового inventory — `ansible-inventory --graph`; пустой вывод — см. таблицу ниже.
 Шаблоны файлов — REFERENCE §7.
 
@@ -162,6 +167,10 @@ openstack --os-cloud <имя> network list --external
 - Pulumi: `aws.Provider` с `s3UsePathStyle` и `skip*`; `accessKey` у `IamS3CredentialsV1` —
   секрет, выводить с `--show-secrets`; изолировать `~/.aws` (`AWS_CONFIG_FILE=/dev/null`).
 - Бакет стейта — в отдельном bootstrap-стеке; у людей личные S3-ключи на проект стейта.
+- Политика бакета — «всё, что не разрешено, запрещено»: роли проекта перестают действовать.
+  Политика только с публичным `GetObject` отрезает сервисного пользователя от бакета (`403` уже на
+  `GetBucketPolicy`); в политике — правило с `s3:*` для id сервисного пользователя. Отрезало — снять
+  политику в панели.
 
 Детали, команды и `pulumi login` для S3 — REFERENCE §9.
 
@@ -173,7 +182,10 @@ openstack --os-cloud <имя> network list --external
 | `401` при project-scope с верным паролем | проекта нет или нет роли на него | `selectel.py projects` |
 | `403` на `identity:list_*` (domain-scope) | норма для этих операций | использовать `/auth/projects` или resell |
 | `403` на создании проекта/пользователя | нет роли `member`/`iam.admin` на аккаунт | выдать роль в панели; повторный `403` — роль «Администратор аккаунта» |
-| `409 already_exists` | имя уровня аккаунта занято | взять уникальное имя |
+| `409 already_exists` | имя уровня аккаунта занято | взять уникальное имя; на первом `up` нового стека — сначала проверить, не лежит ли стейт этой инфраструктуры в другом backend |
+| `403 AccessDenied` на `GetBucketPolicy` при создании политики | политика без правила для самого пользователя | снять политику в панели; правило `s3:*` для id пользователя (REFERENCE §9) |
+| `404 PROJECT_NOT_FOUND` при выпуске S3-ключа | в окружении id удалённого/пересозданного проекта | обновить id проекта (REFERENCE §10) |
+| `zone not found` у `getDomainsZoneV2` | `projectId` не того проекта, где лежит зона | id проекта зоны из выхода стека, где она создана |
 | `500` HTML от `api.selectel.ru/domains/v2` | временный сбой DNS v2 | подождать и повторить |
 | `invalid character '<'` в Pulumi | тот же сбой DNS v2, получен HTML вместо JSON | подождать, повторить `up`/`preview` |
 | `ExternalGatewayForFloatingIPNotFound` | подсеть не подключена к роутеру | `dependsOn: [routerInterface]` |

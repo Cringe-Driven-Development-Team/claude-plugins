@@ -172,6 +172,10 @@ openstack --os-cloud <имя> project list
 | `Flavor not found` | Nova, `getFlavorOutput`/`flavor list` | опечатка в имени флейвора или флейвор недоступен в проекте/регионе | сверить точное имя через `openstack flavor list --long` |
 | образ не найден по имени | Glance, поиск образа по имени | имя посимвольно из `image list --public`, `visibility: public` | сверить точное имя через `openstack image list --public` |
 | пустой `ansible-inventory --graph` | dynamic inventory `openstack.cloud.openstack` | не тот `project_id` в `clouds.yaml`, либо у серверов нет `metadata.role` | проверить `project_id` и `metadata` у серверов, задаваемые Pulumi |
+| `403 AccessDenied` на `GetBucketPolicy` сразу после `PutBucketPolicy` | S3, AWS-провайдер Pulumi (`BucketPolicy`) | политика бакета запрещает всё неразрешённое, в ней нет правила для самого пользователя | снять политику в панели; добавить правило `s3:*` для id пользователя (§9) |
+| `404 PROJECT_NOT_FOUND` | IAM, выпуск S3-ключа | id проекта из окружения/скрипта указывает на удалённый или пересозданный проект | обновить id проекта во всех местах, где он записан (§10) |
+| `NoSuchBucket` | S3 | бакета нет, или ключ выпущен на другой проект | сверить проект ключа; если бакет действительно пропал — проверить, что осталось от проекта |
+| `zone not found` | Pulumi, `getDomainsZoneV2` | `projectId` не того проекта, где лежит зона | id проекта зоны — из выхода стека, где она создана |
 | `CERTIFICATE_VERIFY_FAILED ... self-signed certificate in certificate chain` | Python с python.org на macOS, любой `https` | не выполнен `Install Certificates.command` | выполнить команду или использовать Python со своим доверенным хранилищем сертификатов (например через `certifi`) |
 | смена порта ssh не действует | `sshd_config`, Ubuntu 22.10 и новее | `Port` игнорируется при socket-активации `ssh.socket` | отключить socket-активацию перед сменой порта |
 
@@ -205,11 +209,20 @@ lock-файлу — если lock-файл в `.gitignore`, на чистом к
 
 ```bash
 pulumi config set selectel:domainName <ACCOUNT>
-pulumi config set selectel:username   <USER>
-pulumi config set selectel:password   --secret
 pulumi config set selectel:authUrl    https://cloud.api.selcloud.ru/identity/v3/
 pulumi config set selectel:authRegion ru-9
 ```
+
+Логин и пароль в конфиг стека не кладутся: провайдер читает `OS_USERNAME`, `OS_PASSWORD`,
+`OS_DOMAIN_NAME`, `OS_AUTH_URL` из окружения. У каждого человека свой сервисный пользователь в
+личном файле (например `~/.config/selectel.env`, права 600), который скрипт `env.sh` разбирает
+построчно и экспортирует в `OS_*`. Плюс — `Pulumi.<stack>.yaml` без `secure:`-значений можно
+коммитить. Если в конфиге остались `selectel:username`/`password`, программа должна остановиться с
+подсказкой `pulumi config rm`, а не использовать чужую учётку.
+
+`OS_PROJECT_NAME` в окружении (удобно для `openstack` CLI) провайдер OpenStack прочитает как
+`tenant_name` рядом с явным `tenantId` — авторизация упадёт. Программа проверяет это до создания
+провайдера; для `pulumi` — `unset OS_PROJECT_NAME`.
 
 Ресурсы внутри проекта — через провайдер `openstack`, на кредах проектного пользователя, которого
 создаёт тот же код:
@@ -230,6 +243,16 @@ new selectel.DomainsRrsetV2("gateway", { zoneId: zone.id, projectId: dnsProjectI
 Заметка: `authUrl` провайдера `openstack` — без завершающего слэша, в отличие от
 `selectel:authUrl`.
 
+`pool` у `openstack.networking.FloatingIp` — ForceNew. Брать имя внешней сети из конфига
+(`external-network` по умолчанию), а не `getNetworkOutput({ external: true }).name`: смена ответа API
+пересоздаст floating IP (новый публичный адрес и A-запись), а при нескольких внешних сетях invoke
+без имени падает. Внешнюю сеть для роутера искать по имени: `getNetworkOutput({ name, external: true })`.
+
+Смена флейвора сервера (`flavorId`) — resize на месте с перезагрузкой, не пересоздание; при
+`vendorOptions: { ignoreResizeConfirmation: true }` подтверждать не нужно. Увеличение `size` у
+`blockstorage.Volume` с `enableOnlineResize: true` — тоже без пересоздания; раздел ФС может остаться
+прежнего размера до перезагрузки (`growpart` + `resize2fs`).
+
 Ещё по одной строке:
 - `VpcKeypairV2` требует `userId` сервисного пользователя.
 - `IamServiceuserV1` — роли `[{roleName: "member", scope: "project", projectId}]`.
@@ -242,6 +265,8 @@ new selectel.DomainsRrsetV2("gateway", { zoneId: zone.id, projectId: dnsProjectI
 - Для своего домена зона создаётся ресурсом `DomainsZoneV2({ name, projectId: project.id })` в
   своём проекте.
 - Порядок ресурсов: проект → сервисный пользователь → keypair.
+- `VpcKeypairV2` с фиксированным `name` и сервер (`userData` — ForceNew) — `deleteBeforeReplace: true`:
+  create-before-delete упирается в `409` по имени и в занятые порт/диск.
 
 ## 7. Ansible
 
@@ -289,6 +314,29 @@ collections:
 ```
 openstacksdk>=1.0.0
 ```
+
+Без `clouds.yaml`: openstacksdk сам собирает облако из переменных `OS_*` и называет его
+`OS_CLOUD_NAME` (по умолчанию `envvars`). Выставить `OS_CLOUD_NAME=<имя-облака>` — и inventory с
+`only_clouds: [<имя-облака>]`, и модули с `cloud: <имя-облака>` работают от тех же `OS_*`, что Pulumi.
+Для inventory нужны `OS_PROJECT_ID` проекта серверов и `OS_REGION_NAME` их пула (их удобно брать из
+выходов/конфига стека). Если в найденном `clouds.yaml` тоже есть облако с этим именем, openstacksdk
+падает с ошибкой о конфликте — оставить что-то одно.
+
+Группы можно собирать и без `keyed_groups`, выражением:
+
+```yaml
+groups:
+  gateway: (openstack.metadata | default({})).get('role') == 'gateway'
+```
+
+`ansible_host` плагин ставит в floating IP, если он есть, иначе — фиксированный адрес; поэтому
+«у сервера нет публичного адреса» проверять по API (порты сервера, floating IP проекта), а не по
+`ansible_host`.
+
+`openstacksdk` должен стоять в том же python, что и Ansible: при `pipx install ansible-core` —
+`pipx inject ansible-core -r requirements.txt` (обычный `pip install` поставит мимо venv). Коллекции
+`openstack.cloud` 2.x и `community.general` 13.x требуют свежий ansible-core (для community.general
+13.x — не ниже 2.18; ansible-core из apt Ubuntu 24.04 — 2.16).
 
 Первая проверка dynamic inventory — `ansible-inventory --graph`. Пустой inventory значит: не тот
 `project_id` в `clouds.yaml`, либо у серверов нет `metadata.role` (его ставит Pulumi при создании
@@ -402,7 +450,33 @@ HTML, код N»; таймаут запроса — 20 с. Коды выхода
 curl -sS -X POST "https://api.<POOL>.storage.selcloud.ru/v2/hello/init" -H "X-Auth-Token: <PROJECT_TOKEN>"
 ```
 
-Идемпотентно: повторный вызов на инициализированном проекте отвечает `200` с пустым телом.
+Свежий проект отвечает `201`, повторный вызов на инициализированном — `200` с пустым телом:
+считать успехом любой `2xx`.
+
+### Политика бакета
+
+В Selectel политика бакета работает по принципу «всё, что не разрешено, запрещено»: как только она
+есть, роли проекта (`member` и т.п.) для этого бакета перестают действовать. Политика из одного
+публичного `s3:GetObject` отрезает самого сервисного пользователя: AWS-провайдер Pulumi после
+`PutBucketPolicy` проверяет её `GetBucketPolicy` и получает `403 AccessDenied`, а дальше этот ключ не
+может ни писать объекты, ни снять политику — снимать в панели (бакет → политика доступа). Правильная
+политика — два правила:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Sid": "OwnerFullAccess", "Effect": "Allow", "Principal": { "AWS": ["<SERVICE_USER_ID>"] },
+      "Action": "s3:*", "Resource": ["arn:aws:s3:::<BUCKET>", "arn:aws:s3:::<BUCKET>/*"] },
+    { "Sid": "PublicRead", "Effect": "Allow", "Principal": { "AWS": ["*"] },
+      "Action": "s3:GetObject", "Resource": "arn:aws:s3:::<BUCKET>/*" }
+  ]
+}
+```
+
+`<SERVICE_USER_ID>` — id сервисного пользователя в IAM (в Pulumi — `IamServiceuserV1.id`). Формат
+`Principal` для конкретного пользователя документация Selectel описывает только словами
+(«идентификаторы пользователей») — проверять на тестовом бакете.
 
 ### Pulumi
 
@@ -424,7 +498,9 @@ curl -sS -X POST "https://api.<POOL>.storage.selcloud.ru/v2/hello/init" -H "X-Au
   pulumi login "s3://<BUCKET>/<ПРЕФИКС>?region=<POOL>&endpoint=s3.<POOL>.storage.selcloud.ru&s3ForcePathStyle=true"
   ```
 
-  Префикс в пути (`/main`, `/bootstrap`) разделяет стейты разных проектов в одном бакете.
+  Префикс в пути (`/prod`, `/bootstrap`) разделяет стейты разных проектов в одном бакете. Чтобы не
+  зависеть от глобального `pulumi login`, url прибивается к проекту полем `backend.url` в
+  `Pulumi.yaml` (скилл `pulumi-typescript`).
   Предупреждение `Response has no supported checksum` — норма: S3 Selectel не возвращает
   контрольные суммы.
 - Бакет стейта нельзя создать в стеке, чей стейт в нём хранится: он выносится в отдельный

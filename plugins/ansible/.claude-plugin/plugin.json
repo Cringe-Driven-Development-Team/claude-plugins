@@ -1,6 +1,6 @@
 {
   "name": "ansible",
-  "description": "Ansible: ревью ролей и плейбуков по Red Hat CoP good practices. Скилл из leogallego/claude-ansible-skills, см. upstream.json.",
+  "description": "Ansible: ревью ролей и плейбуков по Red Hat CoP good practices (скилл из leogallego/claude-ansible-skills, см. upstream.json) и собственный скилл ansible-org — подводные камни организации: YAML-условия, ansible-lint, sshd на Ubuntu 24.04, Docker и ufw, verify.yml",
   "author": {
     "name": "Cringe-Driven-Development-Team"
   }
