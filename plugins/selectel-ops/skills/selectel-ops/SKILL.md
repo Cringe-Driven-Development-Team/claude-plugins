@@ -139,7 +139,9 @@ openstack --os-cloud <имя> network list --external
    `pool` у `FloatingIp` — ForceNew: имя внешней сети из конфига, не из `getNetwork`.
 8. `ignoreChanges: ["imageId"]` на диске и сервере — ставить всегда.
 9. DNS: `getDomainsZoneV2Output` + `DomainsRrsetV2` с `projectId` чужой зоны, либо `DomainsZoneV2`
-   для своего домена.
+   для своего домена. NS-запись для своей зоны-поддомена не создавать — делегирование Selectel ставит
+   сам. Импорт DNS-ресурсов — явный провайдер `selectel.Provider` с `projectId` вместо
+   `INFRA_PROJECT_ID` в окружении (REFERENCE §3).
 10. Имена уровня аккаунта — из конфига стека, не хардкодить. Логические имена ресурсов Pulumi не
     переименовывать — входят в URN, пересоздают ресурсы.
 
@@ -171,6 +173,10 @@ inventory `openstack.cloud.openstack` группирует хосты по `open
   Политика только с публичным `GetObject` отрезает сервисного пользователя от бакета (`403` уже на
   `GetBucketPolicy`); в политике — правило с `s3:*` для id сервисного пользователя. Отрезало — снять
   политику в панели.
+- Публичный бакет (`<uuid>.selstorage.ru`, источник CDN) — не политика, а тип бакета через
+  `api.<пул>.storage.selcloud.ru/v2/containers/<бакет>/options`; свой домен бакета — только CNAME на
+  `access.<пул>.storage.selcloud.ru`. CDN — CDN API v3: свой домен после CNAME на `<id>.selcdn.net`,
+  затем Let's Encrypt. REFERENCE §9.
 
 Детали, команды и `pulumi login` для S3 — REFERENCE §9.
 
@@ -186,6 +192,10 @@ inventory `openstack.cloud.openstack` группирует хосты по `open
 | `403 AccessDenied` на `GetBucketPolicy` при создании политики | политика без правила для самого пользователя | снять политику в панели; правило `s3:*` для id пользователя (REFERENCE §9) |
 | `404 PROJECT_NOT_FOUND` при выпуске S3-ключа | в окружении id удалённого/пересозданного проекта | обновить id проекта (REFERENCE §10) |
 | `zone not found` у `getDomainsZoneV2` | `projectId` не того проекта, где лежит зона | id проекта зоны из выхода стека, где она создана |
+| `INFRA_PROJECT_ID must be set` на `import` | у провайдера пустой `projectId` | явный провайдер с `projectId` (REFERENCE §3) |
+| `this_rrset_is_already_exists` на NS поддомена | делегирование ставит Selectel | убрать NS-запись из кода |
+| `refresh` падает `object not found` на DNS | удалено вне Pulumi, провайдер не сообщает «нет ресурса» | `pulumi state delete <urn>` |
+| `domain_cname_invalid` / `450` у Let's Encrypt CDN | свой домен не CNAME (или ещё не разошёлся) | CNAME, повтор с ожиданием (REFERENCE §9) |
 | `500` HTML от `api.selectel.ru/domains/v2` | временный сбой DNS v2 | подождать и повторить |
 | `invalid character '<'` в Pulumi | тот же сбой DNS v2, получен HTML вместо JSON | подождать, повторить `up`/`preview` |
 | `ExternalGatewayForFloatingIPNotFound` | подсеть не подключена к роутеру | `dependsOn: [routerInterface]` |

@@ -105,6 +105,34 @@ const ready = pulumi.all([accessKey, secretKey, projectId]).apply(async ([ak, sk
 Секретные значения — `pulumi.secret(value)` явно там, где провайдер сам не помечает выход секретом;
 строки из нескольких `Output` — `pulumi.interpolate`, не ручная конкатенация после `apply`.
 
+Явный провайдер на учётке, которую создаёт сам стек (сервисный пользователь и его пароль), должен
+ждать создания этой учётки, а не только её входных данных. Имя и пароль известны уже на `preview` —
+провайдер настраивается, invoke'и (`getImage`, `getNetwork`) идут от ещё не созданного пользователя и
+падают с `401`. С пустого стейта этого не видно (неизвестен id проекта), а при частичном стейте
+(после прерванного `up`: проект есть, пользователя нет) `preview` падает. Лечение — завязать вход
+провайдера на `id` ресурса:
+
+```typescript
+const os = new openstack.Provider("project", {
+  userName: pulumi.all([serviceUser.id, serviceUser.name]).apply(([, name]) => name), // ждём создания
+  password: password.result,
+  tenantId: project.id,
+  // ...
+});
+```
+
+API облака, которых нет в провайдере, — dynamic-ресурс (`pulumi.dynamic.Resource` с
+`ResourceProvider`: `create`/`diff`/`update`/`read`/`delete`), а не побочный эффект в `apply`: у него
+есть стейт, `diff` и удаление. Правила:
+- функции API — отдельно от провайдера, с внедряемым http (`curl` через `execFile`), и тестируются на
+  подмене http, как остальной код; dynamic-провайдер — тонкая обёртка;
+- учётка — из `process.env` внутри методов провайдера (процесс провайдера запускает `pulumi` с тем же
+  окружением), не во входных данных: входы и выходы dynamic-ресурса лежат в стейте открытым текстом;
+- `diff` возвращает `replaces` для полей, которые API не меняет на месте, и `deleteBeforeReplace` для
+  уникальных имён; `read` возвращает `id: ""`, если ресурса нет, — тогда `refresh` уберёт его из стейта;
+- ожидание готовности внешней системы (DNS разошёлся, домен принят) — повтор с таймаутом внутри
+  `create`, различая «ещё не готово» (конкретный код ошибки) и прочие ошибки — сразу отказ.
+
 ## 3. Опции ресурсов
 
 - `protect: true` — `destroy`/`up` с удалением ресурса останавливаются с ошибкой, пока флаг не снят
@@ -117,6 +145,10 @@ const ready = pulumi.all([accessKey, secretKey, projectId]).apply(async ([ak, sk
   упрётся в `409` без `deleteBeforeReplace`. Поле `userData` сервера — ForceNew: любое изменение
   (например, список ключей в cloud-init) пересоздаёт сервер, так что `deleteBeforeReplace` на нём
   нужен всегда, а boot-диск с `deleteOnTermination: false` данные сохраняет.
+- Порядок в одном `up`: сначала создаются новые ресурсы, удаления — в конце. Если новый ресурс
+  конфликтует со старым, который удаляется (та же DNS-запись другим типом, зона-поддомен, которая
+  перекрывает запись родительской зоны), — два шага: `pulumi destroy --target <urn старого>`, потом `up`.
+  Ресурсам с уникальным в аккаунте именем (DNS-зона, keypair) при замене — `deleteBeforeReplace: true`.
 - ForceNew-поля не брать из data source (`get…Output`), если значение стабильно: ответ API
   сменится — ресурс пересоздастся. Пример: `pool` у floating IP — имя внешней сети из конфига
   (с разумным значением по умолчанию), а не `getNetwork({ external: true }).name`; такой invoke ещё и
@@ -283,6 +315,20 @@ rm state.json
 после неё тихо используют Pulumi Cloud как backend по умолчанию — следующий `stack init` создаёт
 стек там, а не локально. Каталог для `file://` — создавать заранее (`mkdir -p`) и после `login`
 проверять `pulumi whoami --verbose`/`pulumi stack` на ожидаемый backend, а не только код возврата.
+
+Пустой или обрезанный стейт — `failed to load checkpoint: ... unexpected end of JSON input`: запись
+стейта прервали (Ctrl+C во время `up`/`refresh`), `.pulumi/stacks/<проект>/<стек>.json` в бакете —
+0 байт. Рядом `<стек>.json.bak` — предыдущий checkpoint (Pulumi копирует его перед каждой записью), а в
+`.pulumi/history/` и `.pulumi/backups/` — более старые. Восстановление — до любой следующей
+записывающей команды (она скопирует пустой файл поверх `.bak`): скачать `.bak`, проверить (валидный
+JSON, `checkpoint.latest.resources`, время), затем скопировать его поверх `<стек>.json` в бакете и
+проверить `pulumi stack --show-urns`. `stack import` не годится — он сначала загружает сломанный стейт.
+
+`refresh` не убирает ресурс, удалённый вне Pulumi, если провайдер на чтение отвечает ошибкой
+(`not found`), а не пустым результатом (так делают, например, DNS-ресурсы terraform-bridged провайдера
+Selectel): `refresh` падает. Такие записи — `pulumi state delete <urn>` (зависимые — первыми, с
+`protect` — сначала `state unprotect`), затем `refresh --clear-pending-creates`, если висит прерванное
+создание.
 
 Прочие операции со стейтом (state delete/move/repair, refresh, targeted operations, CI-настройка) —
 скилл `pulumi-cli`.
