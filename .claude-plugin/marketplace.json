@@ -15,7 +15,7 @@
     {
       "name": "ansible",
       "source": "./plugins/ansible",
-      "description": "Ansible: ревью ролей и плейбуков по Red Hat CoP good practices"
+      "description": "Ansible: ревью по Red Hat CoP good practices и подводные камни организации (YAML-условия, ansible-lint, sshd, Docker и ufw, verify.yml)"
     },
     {
       "name": "selectel-ops",

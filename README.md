@@ -38,6 +38,7 @@
 | `pulumi` | `pulumi-cli` | [dirien/claude-skills](https://github.com/dirien/claude-skills) | MIT |
 | `pulumi` | `pulumi-typescript` | собственный (идеи — [dirien/claude-skills](https://github.com/dirien/claude-skills), текст свой) | MIT |
 | `ansible` | `ansible-good-practices` | [leogallego/claude-ansible-skills](https://github.com/leogallego/claude-ansible-skills) | GPL-3.0 |
+| `ansible` | `ansible-org` | собственный — подводные камни `ansible/` организации | MIT |
 | `selectel-ops` | `selectel-ops` | собственный плагин организации (перенесён из YarikMix/claude-plugins) | MIT |
 
 Закреплённые коммиты — в `upstream.json`. Почему взяты именно эти скиллы и что сознательно не
@@ -54,7 +55,7 @@ git diff                   # прочитать, что изменилось в 
 мержа обновления приходят всем по `/plugin marketplace update cdd`. Скиллы апстримов руками не правим: следующий `sync.sh` затрёт правки.
 Нужна своя версия — отдельный скилл в том же плагине.
 
-Зависимости: `bash`, `git`, `jq`. Тесты: `bash tests/sync_test.sh && bash tests/manifest_test.sh && bash plugins/pulumi/tests/check_docs.sh`;
+Зависимости: `bash`, `git`, `jq`. Тесты: `bash tests/sync_test.sh && bash tests/manifest_test.sh && bash plugins/pulumi/tests/check_docs.sh && bash plugins/ansible/tests/check_docs.sh`;
 `selectel-ops` — `cd plugins/selectel-ops && python3 -m unittest discover -s tests -t . && bash tests/check_docs.sh`.
 
 Отдельно, не в этой цепочке — оценка поведения скиллов живыми вызовами модели (платно,
@@ -69,6 +70,8 @@ git diff                   # прочитать, что изменилось в 
 | `pulumi` | `file-login-trap` — `login file://` откатился на Pulumi Cloud | 1 | 0.67 | +0.33 |
 | `selectel-ops` | `zone-move-import` — перенос DNS-зоны и импорт в Pulumi | 1 | 0 | +1 |
 | `pulumi` | `state-migration`, `zone-import` (`--runs 1`) | 1 | 1 | 0 — общие знания Pulumi |
+
+Ещё не прогонялись: `pulumi` — `wrong-backend-prefix` (стейт не в том префиксе, `backend.url`), `selectel-ops` — `bucket-policy-lockout` (политика бакета отрезала сервисного пользователя), `ansible` — `yaml-colon-conditional` (условие с «: » без кавычек).
 
 Вариант «без плагина» запускается в каталоге этого репо и может найти текст скиллов поиском по
 файлам — Δ скорее занижена, чем завышена.
