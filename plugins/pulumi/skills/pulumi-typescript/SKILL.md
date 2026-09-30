@@ -45,7 +45,8 @@ description: Pulumi-программы на TypeScript в репозитория
 понятной ошибкой вместо позднего 401. Побочные эффекты (сетевые вызовы, ожидание) внутри `apply` —
 под `if (pulumi.runtime.isDryRun()) return …;`, иначе они выполняются и на `preview`. Опции ресурсов —
 `protect`, `deleteBeforeReplace`, `ignoreChanges`, временный `import`, `aliases` при переименовании.
-Общая теория `Output`/`apply()` и компонентов — скилл `pulumi-best-practices`. REFERENCE §2–§3.
+API без провайдера — dynamic-ресурс с учёткой из `process.env`, не побочный эффект в `apply`.
+Явный провайдер на учётке, создаваемой стеком, — через `id` этой учётки. Общая теория `Output`/`apply()` и компонентов — скилл `pulumi-best-practices`. REFERENCE §2–§3.
 
 ## Тесты
 
@@ -79,6 +80,10 @@ passphrase стеков — длинная случайная (REFERENCE §7). �
 | `409 already_exists` на первом `up` нового стека | стейт живой инфраструктуры лежит в другом backend/префиксе | не создавать заново: найти стейт (`whoami -v`, `stack ls` в каждом backend) и перенести (REFERENCE §5) |
 | `401` на каждом вызове провайдера после `stack import` | импортирован устаревший экспорт: учётка провайдера из него уже удалена | не `up`: `stack rm --force` и перенос свежего экспорта или стек с нуля (REFERENCE §5) |
 | `incorrect passphrase` на `stack init` | `encryptionsalt` в `Pulumi.<stack>.yaml` от другой passphrase | командная passphrase в окружение; новый стек — убрать строку `encryptionsalt` (REFERENCE §7) |
+| `401` у провайдера на `preview` при частичном стейте | провайдер настроен на ещё не созданного пользователя | вход провайдера через `id` пользователя (REFERENCE §2) |
+| `failed to load checkpoint: ... unexpected end of JSON input` | запись стейта прервана, файл стека пустой | ничего не запускать; скопировать `<стек>.json.bak` поверх (REFERENCE §5) |
+| `refresh` падает `not found` на удалённом вне Pulumi ресурсе | провайдер не сообщает «ресурса нет» | `pulumi state delete <urn>` (REFERENCE §5) |
+| новый ресурс конфликтует со старым, удаляемым в том же `up` | удаления идут после создания | `destroy --target` старого, потом `up` (REFERENCE §3) |
 | `Missing required configuration variable` | не задан конфиг стека | `pulumi config set`; в тестах — `setAllConfig` |
 | `Response has no supported checksum` | S3-совместимое хранилище без контрольных сумм | норма, не ошибка |
 | тест на моках зависает в `beforeAll` (таймаут 5000 мс) | в `preview` выход без значения из моков — unknown, `apply` не вызывается | вернуть из `newResource` значения всех выходов, которых ждёт тест (REFERENCE §4) |

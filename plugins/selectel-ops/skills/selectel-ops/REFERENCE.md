@@ -11,6 +11,8 @@
 | resell (проекты аккаунта) | `https://api.selectel.ru/vpc/resell/v2` | domain | список и создание проектов аккаунта, не требует существующего project-токена |
 | compute / network / image / volumev3 (Nova / Neutron / Glance / Cinder) | из каталога Keystone, по региону `ru-N`; хосты `<region>.cloud.api.selcloud.ru` для `ru`/`gis`, `*.servercore.com` для `kz`/`uz`/`ke` | project | флейворы, образы, сети, диски — только внутри существующего проекта |
 | dnsv2 (DNS v2) | `https://api.selectel.ru/domains/v2` (ru); `https://api.servercore.com/domains/v2` (kz, uz, ke) | project | один эндпоинт на все ru-регионы, второй провайдер/регион не нужен |
+| управление хранилищем пула | `https://api.<пул>.storage.selcloud.ru/v2` | project | инициализация S3, тип бакета, свои домены бакета (§9); OpenAPI — `docs.selectel.ru/en/api/object-storage.json` |
+| CDN API v3 | `https://api.selectel.ru/cdn/v3` | project | HTTP CDN-ресурсы, Let's Encrypt (§9); OpenAPI — `docs.selectel.ru/en/api/cdn.json` |
 
 Регион (пул) — вида `ru-9`, зона доступности внутри пула — вида `ru-9a`. Эндпоинт для каждого
 сервиса всегда брать из каталога Keystone по фактическому региону, не хардкодить URL.
@@ -97,6 +99,20 @@ DNS v2 отвечает 401.
   `invalid character '<' looking for beginning of value` на `getDomainsZoneV2`/`DomainsRrsetV2` —
   лечится ожиданием и повтором, не правкой конфига.
 
+### Зона-поддомен
+
+Зона поддомена (`sub.example.ru.`) в том же аккаунте, что и родительская, создаётся обычным
+`POST /zones` (в Pulumi — `DomainsZoneV2`), а NS-делегирование в родительской зоне Selectel ставит сам.
+В `GET /zones/<id>/rrset` родительской зоны этой NS-записи может не быть, но своя NS-запись
+`sub.example.ru.` падает с `this_rrset_is_already_exists` — не создавать её.
+
+Пока зона-поддомен существует, NS Selectel отвечают на `sub.example.ru` из неё: CNAME с тем же именем
+в родительской зоне не виден, даже если API его вернул. Переход «зона-поддомен → CNAME в родительской
+зоне» — в два шага: сначала удалить зону (в Pulumi — `destroy --target`), потом создавать CNAME;
+Pulumi в одном `up` создаёт новое раньше, чем удаляет старое. На вершине зоны CNAME невозможен —
+ALIAS (он разворачивается в A/AAAA), но там, где сервис проверяет именно CNAME (свой домен бакета,
+§9), ALIAS не подходит.
+
 ### Перенос зоны между проектами
 
 В панели: DNS → Доменные зоны → ⋮ у нужной зоны → «Перенести в другой проект». Записи и id зоны
@@ -111,9 +127,26 @@ DNS v2 отвечает 401.
 другой проект» в панели, а не API.
 
 Импорт существующей зоны в Pulumi: id импорта для `DomainsZoneV2` — имя зоны с точкой на конце
-(`example.com.`), проект, в котором Pulumi будет искать зону при импорте, задаётся переменной
-окружения `INFRA_PROJECT_ID=<PROJECT_ID>` на время `pulumi preview` и `pulumi up` с опцией `import`
-(preview тоже читает зону через провайдер). После успешного импорта опцию
+(`example.com.`), для `DomainsRrsetV2` — `<зона>/<имя записи>/<тип>` (`example.com./sub.example.com./NS`).
+Проекта в id нет: провайдер берёт его из своей настройки `projectId`, у которой значение по умолчанию —
+переменная окружения `INFRA_PROJECT_ID` (без неё — `INFRA_PROJECT_ID must be set for the resource
+import`). Нужна она на время `pulumi preview` и `pulumi up` с опцией `import` (preview тоже читает
+зону через провайдер). Без ручной переменной — явный провайдер для DNS-ресурсов с проектом из
+конфига стека; из программы `process.env.INFRA_PROJECT_ID` не выставить — провайдер работает в
+отдельном процессе:
+
+```typescript
+const dnsProvider = new selectel.Provider("dns", {
+  projectId: dnsProjectId,                      // проект зоны — из конфига стека
+  domainName,                                   // явный провайдер не читает selectel:* из конфига
+  authUrl: selectelCfg.get("authUrl"),
+  authRegion: selectelCfg.get("authRegion"),    // логин и пароль — из OS_*, как у провайдера по умолчанию
+});
+new selectel.DomainsZoneV2("zone", { name: "example.com.", projectId: dnsProjectId },
+  { provider: dnsProvider, import: "example.com." });
+```
+
+После успешного импорта опцию
 `import` у ресурса нужно убрать — иначе повторный `up` пытается импортировать снова (детали и
 жизненный цикл опции `import` — скилл `pulumi-typescript`, §6, в плагине `pulumi`).
 
@@ -176,6 +209,11 @@ openstack --os-cloud <имя> project list
 | `404 PROJECT_NOT_FOUND` | IAM, выпуск S3-ключа | id проекта из окружения/скрипта указывает на удалённый или пересозданный проект | обновить id проекта во всех местах, где он записан (§10) |
 | `NoSuchBucket` | S3 | бакета нет, или ключ выпущен на другой проект | сверить проект ключа; если бакет действительно пропал — проверить, что осталось от проекта |
 | `zone not found` | Pulumi, `getDomainsZoneV2` | `projectId` не того проекта, где лежит зона | id проекта зоны — из выхода стека, где она создана |
+| `INFRA_PROJECT_ID must be set for the resource import` | Pulumi, `import` DNS-ресурса | у провайдера пустой `projectId` | явный провайдер с `projectId` или переменная на время `preview` и `up` (§3) |
+| `this_rrset_is_already_exists` на NS-записи поддомена | DNS v2 | делегирование зоны-поддомена Selectel ставит сам | не создавать NS-запись для своей зоны-поддомена (§3) |
+| `object not found` / `zone not found` на `refresh` | Pulumi, `DomainsZoneV2`/`DomainsRrsetV2`, удалённые вне Pulumi | провайдер отвечает ошибкой, а не «ресурса нет» — `refresh` их не уберёт | `pulumi state delete <urn>` (сначала записи, потом зона; с `protect` — `state unprotect`) |
+| `422 domain_cname_invalid` / `domain_lookup_failed` | API хранилища, свой домен бакета | нет CNAME на `access.<пул>.storage.selcloud.ru` (ALIAS не принимается) или он ещё не разошёлся | CNAME в родительской зоне и повтор с ожиданием (§9) |
+| `450 Invalid Request` на заказе Let's Encrypt | CDN API v3 | у ресурса нет своего домена в `names` | сначала CNAME на `<id>.selcdn.net`, потом домен в `names` (§9) |
 | `CERTIFICATE_VERIFY_FAILED ... self-signed certificate in certificate chain` | Python с python.org на macOS, любой `https` | не выполнен `Install Certificates.command` | выполнить команду или использовать Python со своим доверенным хранилищем сертификатов (например через `certifi`) |
 | смена порта ssh не действует | `sshd_config`, Ubuntu 22.10 и новее | `Port` игнорируется при socket-активации `ssh.socket` | отключить socket-активацию перед сменой порта |
 
@@ -263,7 +301,8 @@ new selectel.DomainsRrsetV2("gateway", { zoneId: zone.id, projectId: dnsProjectI
 - Имена уровня аккаунта (проект, сервисный пользователь, keypair) брать из конфига стека, не
   хардкодить в коде.
 - Для своего домена зона создаётся ресурсом `DomainsZoneV2({ name, projectId: project.id })` в
-  своём проекте.
+  своём проекте. Имя зоны уникально в аккаунте, смена `projectId` пересоздаёт зону —
+  `deleteBeforeReplace: true`, иначе create-before-delete упрётся в занятое имя.
 - Порядок ресурсов: проект → сервисный пользователь → keypair.
 - `VpcKeypairV2` с фиксированным `name` и сервер (`userData` — ForceNew) — `deleteBeforeReplace: true`:
   create-before-delete упирается в `409` по имени и в занятые порт/диск.
@@ -510,6 +549,47 @@ curl -sS -X POST "https://api.<POOL>.storage.selcloud.ru/v2/hello/init" -H "X-Au
   стейта.
 - При версионировании удалённый объект оставляет версии и delete marker; убрать полностью —
   `s3api list-object-versions` + `delete-object --version-id`.
+- Копирование объекта внутри бакета (`PUT` с `x-amz-copy-source`) через `curl --aws-sigv4` —
+  с заголовком `Content-Length: 0`, иначе `411 MissingContentLength`.
+
+### Публичный бакет и свой домен
+
+Тип бакета (`private`/`public`) — не S3 API: ACL и Public Access Block Selectel не поддерживает, а
+политика бакета с публичным `GetObject` открывает чтение через S3 API, но не делает бакет публичным.
+Тип — через API управления хранилищем пула с project-токеном:
+
+```bash
+# текущие настройки; general.type — public/private
+curl -sS https://api.<POOL>.storage.selcloud.ru/v2/containers/<BUCKET>/options -H "X-Auth-Token: <TOKEN>"
+# сделать публичным
+curl -sS -X PUT https://api.<POOL>.storage.selcloud.ru/v2/containers/<BUCKET>/options \
+  -H "X-Auth-Token: <TOKEN>" -H 'Content-Type: application/json' -d '{"general":{"type":"public"}}'
+# публичный домен <uuid>.selstorage.ru (путь не описан в документации, отвечает [{container, uuid}])
+curl -sS https://api.<POOL>.storage.selcloud.ru/v2/containers/<BUCKET>/pubdomains -H "X-Auth-Token: <TOKEN>"
+```
+
+Публичный бакет читается без авторизации по `https://<uuid>.selstorage.ru/<ключ>`; только он годится
+источником CDN и для своего домена. Свой домен — `PUT .../containers/<BUCKET>/domains` с
+`{"domain_name": "<домен без точки>"}`. Selectel проверяет, что домен — CNAME на
+`access.<POOL>.storage.selcloud.ru`: ALIAS отвергается (`422 domain_cname_invalid`), поэтому домен —
+не вершина зоны (например `static.example.ru` записью в зоне `example.ru.`); свежий CNAME — повтор с
+ожиданием, пока не разойдётся (`domain_lookup_failed`/`domain_cname_invalid`). TLS-сертификат для
+своего домена бакета — в панели (бакет → Домены), в API его выпуска нет. В Pulumi всё это — не
+провайдер, а dynamic-ресурс или панель (скилл `pulumi-typescript`).
+
+### CDN
+
+CDN API v3 (`https://api.selectel.ru/cdn/v3`, project-токен): `POST /resources` с `name`
+(`^[a-zA-Zа-яА-ЯёЁ0-9\-_ ]{1,50}$`, без точек) и `origin` — для бакета источник
+`{"servers": {"<uuid>.selstorage.ru": {"port": 443}}, "https": true}`. Ответ `200` с `status: accept`
+или `error` в теле (проверять тело, не код). Выдаётся `cdn_domain` — `<id>.selcdn.net`.
+
+- Свой домен (`names`) Selectel сохраняет, только когда он уже CNAME на `cdn_domain`; иначе молча
+  отбрасывает, даже при `accept`. Значит порядок: ресурс → CNAME на `cdn_domain` → `PATCH names`
+  (проверить `GET`) → Let's Encrypt (`POST /letsencrypt/<id>`, статус — `GET`, `data.task_status`
+  `accepted` → `processed`/`failed`). Без своего домена заказ отвечает `450 Invalid Request`.
+- `DELETE /resources/<id>` в документации нет (не проверено); выключение — `PATCH {"active": false}`.
+- Панель делает привязку своего домена и сертификат сама, если зона домена — в DNS Selectel.
 
 ## 10. Проекты
 
