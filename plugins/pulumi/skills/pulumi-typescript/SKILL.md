@@ -25,6 +25,11 @@ description: Pulumi-программы на TypeScript в репозитория
    имя пересоздаёт ресурс; для переименования — `aliases` (REFERENCE §3).
 4. Не удаляешь экспорт стейта (`stack export --show-secrets`) и старый бэкенд, пока ключи доступа к
    новому бэкенду не сохранены вне стейта (REFERENCE §5).
+5. Не запускаешь `stack init`/`up` в стеке, пока не убедился, в каком backend он лежит: `pulumi whoami -v`
+   показывает ожидаемый Backend URL, `pulumi stack ls` — ожидаемые стеки. Пустой стек поверх живой
+   инфраструктуры начнёт создавать всё заново (409, дубли) — REFERENCE §5.
+6. Не импортируешь экспорт стейта, сделанный до `destroy` или до других изменений: экспорт — свежий,
+   сразу перед переносом; перед импортом — `stack --show-urns` на источнике (REFERENCE §5).
 
 ## Проект
 
@@ -54,9 +59,12 @@ description: Pulumi-программы на TypeScript в репозитория
 
 ## Эксплуатация
 
-DIY-backend стейта в S3 (`pulumi login "s3://…?...&s3ForcePathStyle=true"`), отдельный префикс в
-бакете на проект/стек. Перенос стейта между backend и импорт существующего ресурса — REFERENCE §5–§6;
-bootstrap-стек для самого бакета стейта — REFERENCE §7. Прочие операции CLI и стейта — скилл
+DIY-backend стейта в S3, отдельный префикс в бакете на проект (`bootstrap/`, `prod/`). Backend прибит к
+каталогу проекта полем `backend.url` в `Pulumi.yaml` — глобальный `pulumi login` на такой проект не
+влияет и не нужен; проверка — `pulumi whoami -v`, чужой backend — только `PULUMI_BACKEND_URL=<url> pulumi …`.
+Перенос стейта между backend и импорт существующего ресурса — REFERENCE §5–§6; bootstrap-стек для
+самого бакета стейта — REFERENCE §7. `Pulumi.<stack>.yaml` коммитится: `secure:`-значений в нём нет,
+passphrase стеков — длинная случайная (REFERENCE §7). Прочие операции CLI и стейта — скилл
 `pulumi-cli`. Всё специфичное для Selectel (S3, DNS, проекты) — скилл `selectel-ops`.
 
 ## Когда что-то не получается
@@ -66,7 +74,11 @@ bootstrap-стек для самого бакета стейта — REFERENCE �
 | `pulumi login file://…` + `stack init` → стек оказался в Pulumi Cloud | каталога нет, `login` упал, CLI без backend'а создал временный аккаунт Pulumi Cloud | `logout`; если стек пуст — удалить его (`stack rm`) после подтверждения человека; `mkdir -p` каталога, повторить `login` |
 | `stack output X` выводит `[secret]` (8 символов) | выход секретный (у terraform-bridged провайдеров секретом бывает и access key) | `pulumi stack output X --show-secrets` |
 | `open ~/...: no such file or directory` у AWS-провайдера / `pulumi login s3://` | Go SDK читает `~/.aws/config`, `ca_bundle` с `~` не раскрывается | `AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null` |
-| замена сервера падает на занятом порте/диске | create-before-delete по умолчанию | `deleteBeforeReplace: true` |
+| замена сервера падает на занятом порте/диске | create-before-delete по умолчанию | `deleteBeforeReplace: true` (и у keypair с фиксированным именем) |
+| `no stack named '<стек>' found` | команда смотрит не в тот backend (глобальный `login`, не тот каталог, `PULUMI_BACKEND_URL`) | `pulumi whoami -v`; backend — через `backend.url` в `Pulumi.yaml` (REFERENCE §5) |
+| `409 already_exists` на первом `up` нового стека | стейт живой инфраструктуры лежит в другом backend/префиксе | не создавать заново: найти стейт (`whoami -v`, `stack ls` в каждом backend) и перенести (REFERENCE §5) |
+| `401` на каждом вызове провайдера после `stack import` | импортирован устаревший экспорт: учётка провайдера из него уже удалена | не `up`: `stack rm --force` и перенос свежего экспорта или стек с нуля (REFERENCE §5) |
+| `incorrect passphrase` на `stack init` | `encryptionsalt` в `Pulumi.<stack>.yaml` от другой passphrase | командная passphrase в окружение; новый стек — убрать строку `encryptionsalt` (REFERENCE §7) |
 | `Missing required configuration variable` | не задан конфиг стека | `pulumi config set`; в тестах — `setAllConfig` |
 | `Response has no supported checksum` | S3-совместимое хранилище без контрольных сумм | норма, не ошибка |
 | тест на моках зависает в `beforeAll` (таймаут 5000 мс) | в `preview` выход без значения из моков — unknown, `apply` не вызывается | вернуть из `newResource` значения всех выходов, которых ждёт тест (REFERENCE §4) |
