@@ -1,0 +1,7 @@
+{
+  "name": "cdd-tasks",
+  "description": "Задачи и PR команды: где заводить задачу, описание, sub-issues, доска, строка Closes или Part of. Собственный плагин организации.",
+  "author": {
+    "name": "Cringe-Driven-Development-Team"
+  }
+}
