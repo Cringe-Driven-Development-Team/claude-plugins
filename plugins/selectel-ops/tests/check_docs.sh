@@ -17,7 +17,8 @@ for s in "X-Subject-Token" "vpc/resell/v2/projects" "domains/v2/zones" "external
          "s3ForcePathStyle" "s3UsePathStyle" "BucketVersioning" \
          "Перенести в другой проект" "INFRA_PROJECT_ID" "vpc/resell/v2/projects/<PROJECT_ID>" \
          "X-Token" "a.ns.selectel.ru" "по сроку жизни" \
-         "только на авторизованные запросы" "s3.bucket.user" "--replace"; do
+         "только на авторизованные запросы" "s3.bucket.user" "--replace" \
+         "HeadObject" "AbortMultipartUpload" "_s3multipartuploads"; do
   need REFERENCE.md "$s"
 done
 

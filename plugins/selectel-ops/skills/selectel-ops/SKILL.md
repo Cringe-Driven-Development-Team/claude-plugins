@@ -178,6 +178,8 @@ inventory `openstack.cloud.openstack` группирует хосты по `open
   Анонимно — только `https://<uuid>.selstorage.ru/<ключ>` у бакета типа `public`.
 - Приложению — отдельный пользователь с ролью `s3.bucket.user` и свой ключ; доступ — только там, где
   его id назван в политике бакета. Перевыпуск ключа — `pulumi up --replace`, не случайная строка.
+- Ключ приложения: без `s3:ListBucket` несуществующий объект — `403`, не `404`; multipart с одним
+  `s3:PutObject` загружает, но не прерывает и не листает загрузки (`AccessDenied`). REFERENCE §9.
 - Публичный бакет (`<uuid>.selstorage.ru`, источник CDN) — не политика, а тип бакета через
   `api.<пул>.storage.selcloud.ru/v2/containers/<бакет>/options`; свой домен бакета — только CNAME на
   `access.<пул>.storage.selcloud.ru`. CDN — CDN API v3: свой домен после CNAME на `<id>.selcdn.net`,
@@ -197,6 +199,8 @@ inventory `openstack.cloud.openstack` группирует хосты по `open
 | `403 AccessDenied` на `GetBucketPolicy` при создании политики | политика без правила для самого пользователя | снять политику в панели; правило `s3:*` для id пользователя (REFERENCE §9) |
 | анонимный `GET` через endpoint S3 — `403`, хотя в политике `PublicRead` | политика — только для авторизованных запросов | публичный домен бакета `<uuid>.selstorage.ru` или CDN (REFERENCE §9) |
 | `pulumi refresh` падает `ответ не JSON: HTTP 204` на приватном бакете | `pubdomains` отвечает `204` с пустым телом | считать `204`/пустое тело ответом «домена нет» (REFERENCE §9) |
+| `403` вместо `404` на несуществующий объект ключом приложения | в политике нет `s3:ListBucket` | считать `403` ответом «объекта нет» или дать листинг (REFERENCE §9) |
+| `AccessDenied` на `AbortMultipartUpload`/`ListParts` ключом приложения | `s3:PutObject` даёт загрузку частями, но не управление ею | прервать ключом с `s3:*` (REFERENCE §9) |
 | `404 PROJECT_NOT_FOUND` при выпуске S3-ключа | в окружении id удалённого/пересозданного проекта | обновить id проекта (REFERENCE §10) |
 | `zone not found` у `getDomainsZoneV2` | `projectId` не того проекта, где лежит зона | id проекта зоны из выхода стека, где она создана |
 | `INFRA_PROJECT_ID must be set` на `import` | у провайдера пустой `projectId` | явный провайдер с `projectId` (REFERENCE §3) |
