@@ -19,7 +19,8 @@
   "enabledPlugins": {
     "pulumi@cdd": true,
     "ansible@cdd": true,
-    "selectel-ops@cdd": true
+    "selectel-ops@cdd": true,
+    "cdd-tasks@cdd": true
   }
 }
 ```
@@ -40,6 +41,7 @@
 | `ansible` | `ansible-good-practices` | [leogallego/claude-ansible-skills](https://github.com/leogallego/claude-ansible-skills) | GPL-3.0 |
 | `ansible` | `ansible-org` | собственный — подводные камни `ansible/` организации | MIT |
 | `selectel-ops` | `selectel-ops` | собственный плагин организации (перенесён из YarikMix/claude-plugins) | MIT |
+| `cdd-tasks` | `cdd-tasks` | собственный — задачи и PR по `CONTRIBUTING.md` организации | MIT |
 
 Закреплённые коммиты — в `upstream.json`. Почему взяты именно эти скиллы и что сознательно не
 взято — `docs/design.md`.
@@ -55,7 +57,7 @@ git diff                   # прочитать, что изменилось в 
 мержа обновления приходят всем по `/plugin marketplace update cdd`. Скиллы апстримов руками не правим: следующий `sync.sh` затрёт правки.
 Нужна своя версия — отдельный скилл в том же плагине.
 
-Зависимости: `bash`, `git`, `jq`. Тесты: `bash tests/sync_test.sh && bash tests/manifest_test.sh && bash plugins/pulumi/tests/check_docs.sh && bash plugins/ansible/tests/check_docs.sh`;
+Зависимости: `bash`, `git`, `jq`. Тесты: `bash tests/sync_test.sh && bash tests/manifest_test.sh && bash plugins/pulumi/tests/check_docs.sh && bash plugins/ansible/tests/check_docs.sh && bash plugins/cdd-tasks/tests/check_docs.sh`;
 `selectel-ops` — `cd plugins/selectel-ops && python3 -m unittest discover -s tests -t . && bash tests/check_docs.sh`.
 
 Отдельно, не в этой цепочке — оценка поведения скиллов живыми вызовами модели (платно,
@@ -69,6 +71,7 @@ git diff                   # прочитать, что изменилось в 
 | `pulumi` | `personal-state-key` — доступ новичка к стейту | 1 | 0.33 | +0.67 |
 | `pulumi` | `file-login-trap` — `login file://` откатился на Pulumi Cloud | 1 | 0.67 | +0.33 |
 | `selectel-ops` | `zone-move-import` — перенос DNS-зоны и импорт в Pulumi | 1 | 0 | +1 |
+| `cdd-tasks` | `multi-repo-task` — задача на два репозитория: родитель, sub-issue, строки `Closes` (2026-10-03) | 1 | 0 | +1 |
 | `pulumi` | `state-migration`, `zone-import` (`--runs 1`) | 1 | 1 | 0 — общие знания Pulumi |
 
 Ещё не прогонялись: `pulumi` — `wrong-backend-prefix` (стейт не в том префиксе, `backend.url`), `selectel-ops` — `bucket-policy-lockout` (политика бакета отрезала сервисного пользователя), `ansible` — `yaml-colon-conditional` (условие с «: » без кавычек).

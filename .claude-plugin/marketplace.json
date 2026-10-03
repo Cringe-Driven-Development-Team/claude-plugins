@@ -21,6 +21,11 @@
       "name": "selectel-ops",
       "source": "./plugins/selectel-ops",
       "description": "Selectel: доступ и роли, токены, проекты, флейворы, DNS, S3, диагностика ошибок, стык с Pulumi и Ansible"
+    },
+    {
+      "name": "cdd-tasks",
+      "source": "./plugins/cdd-tasks",
+      "description": "Задачи и PR команды: где заводить задачу, описание, sub-issues, доска, строка Closes или Part of"
     }
   ]
 }
