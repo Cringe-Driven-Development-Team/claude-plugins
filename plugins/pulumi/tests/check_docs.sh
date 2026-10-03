@@ -19,7 +19,8 @@ for h in "## 1. Проект" "## 2. Output и apply" "## 3. Опции ресу
 done
 for s in "isDryRun" "deleteBeforeReplace" "protect" "ignoreChanges" "aliases" "--show-secrets" \
          "file://" "setMocks" "Bun.spawnSync" "packagemanager: bun" "terraform-provider" "sdks/" \
-         "stack export" "stack import" "s3ForcePathStyle" "selectel-ops" "pulumi-best-practices" "pulumi-cli"; do
+         "stack export" "stack import" "s3ForcePathStyle" "selectel-ops" "pulumi-best-practices" "pulumi-cli" \
+         "__provider" "--exclude-protected"; do
   need REFERENCE.md "$s"
 done
 for s in "isDryRun" "deleteBeforeReplace" "--show-secrets" "file://" "setMocks" "import" "selectel-ops"; do

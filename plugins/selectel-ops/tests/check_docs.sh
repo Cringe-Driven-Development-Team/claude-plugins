@@ -16,7 +16,8 @@ for s in "X-Subject-Token" "vpc/resell/v2/projects" "domains/v2/zones" "external
          "hello/init" "InvalidAccessKeyId" "iam/v1/service_users" "ca_bundle" "--show-secrets" \
          "s3ForcePathStyle" "s3UsePathStyle" "BucketVersioning" \
          "Перенести в другой проект" "INFRA_PROJECT_ID" "vpc/resell/v2/projects/<PROJECT_ID>" \
-         "X-Token" "a.ns.selectel.ru" "по сроку жизни"; do
+         "X-Token" "a.ns.selectel.ru" "по сроку жизни" \
+         "только на авторизованные запросы" "s3.bucket.user" "--replace"; do
   need REFERENCE.md "$s"
 done
 

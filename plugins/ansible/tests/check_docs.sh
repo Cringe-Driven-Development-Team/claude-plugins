@@ -8,13 +8,13 @@ need() { grep -qF -- "$2" "$1" || { echo "нет в $1: $2"; fail=1; }; }
 [ -f SKILL.md ] || { echo "нет SKILL.md"; exit 1; }
 need SKILL.md "name: ansible-org"
 need SKILL.md "description:"
-for h in "## Когда применять" "## Никогда" "## Подключение и доступ" "## sshd на Ubuntu 24.04" "## Docker" \
+for h in "## Когда применять" "## Никогда" "## Подключение и доступ" "## sshd на Ubuntu 24.04" "## Docker" "## Секреты (ansible-vault)" \
          "## ansible-lint" "## verify.yml" "## Установка" "## Когда что-то не получается"; do
   need SKILL.md "$h"
 done
 for s in "Conditional expressions must be strings" "exclusive" "ssh.socket" "DOCKER-USER" \
          "docker_compose_v2" "var-naming[no-role-prefix]" "name[casing]" "pipx inject" \
-         "ansible-good-practices" "selectel-ops"; do
+         "ansible-good-practices" "selectel-ops" "ansible-vault" "--show-secrets"; do
   need SKILL.md "$s"
 done
 lines=$(wc -l < SKILL.md)

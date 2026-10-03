@@ -206,6 +206,9 @@ openstack --os-cloud <имя> project list
 | образ не найден по имени | Glance, поиск образа по имени | имя посимвольно из `image list --public`, `visibility: public` | сверить точное имя через `openstack image list --public` |
 | пустой `ansible-inventory --graph` | dynamic inventory `openstack.cloud.openstack` | не тот `project_id` в `clouds.yaml`, либо у серверов нет `metadata.role` | проверить `project_id` и `metadata` у серверов, задаваемые Pulumi |
 | `403 AccessDenied` на `GetBucketPolicy` сразу после `PutBucketPolicy` | S3, AWS-провайдер Pulumi (`BucketPolicy`) | политика бакета запрещает всё неразрешённое, в ней нет правила для самого пользователя | снять политику в панели; добавить правило `s3:*` для id пользователя (§9) |
+| `403 AccessDenied` на анонимном `GET <эндпоинт S3>/<бакет>/<ключ>` | S3, публичный бакет, в т.ч. с правилом `PublicRead` | политика действует только на авторизованные запросы, `*` — «все авторизованные» | отдавать по `https://<uuid>.selstorage.ru/<ключ>` (тип бакета `public`) или через CDN (§9) |
+| `ответ не JSON: HTTP 204` на `pubdomains` | API хранилища, приватный бакет | у приватного бакета ответ `204` с пустым телом | `204` и пустое тело — «домена нет» (§9) |
+| `AccessDenied` на `ListBuckets` ключом приложения | S3, пользователь с ролью `s3.bucket.user` | доступ у него только там, где id назван в политике бакета | проверять ключ запросом к его бакету, не `ListBuckets` (§9) |
 | `404 PROJECT_NOT_FOUND` | IAM, выпуск S3-ключа | id проекта из окружения/скрипта указывает на удалённый или пересозданный проект | обновить id проекта во всех местах, где он записан (§10) |
 | `NoSuchBucket` | S3 | бакета нет, или ключ выпущен на другой проект | сверить проект ключа; если бакет действительно пропал — проверить, что осталось от проекта |
 | `zone not found` | Pulumi, `getDomainsZoneV2` | `projectId` не того проекта, где лежит зона | id проекта зоны — из выхода стека, где она создана |
@@ -498,8 +501,8 @@ curl -sS -X POST "https://api.<POOL>.storage.selcloud.ru/v2/hello/init" -H "X-Au
 есть, роли проекта (`member` и т.п.) для этого бакета перестают действовать. Политика из одного
 публичного `s3:GetObject` отрезает самого сервисного пользователя: AWS-провайдер Pulumi после
 `PutBucketPolicy` проверяет её `GetBucketPolicy` и получает `403 AccessDenied`, а дальше этот ключ не
-может ни писать объекты, ни снять политику — снимать в панели (бакет → политика доступа). Правильная
-политика — два правила:
+может ни писать объекты, ни снять политику — снимать в панели (бакет → политика доступа). В любой
+политике первым правилом — полный доступ тому пользователю, чьим ключом работает IaC:
 
 ```json
 {
@@ -507,15 +510,32 @@ curl -sS -X POST "https://api.<POOL>.storage.selcloud.ru/v2/hello/init" -H "X-Au
   "Statement": [
     { "Sid": "OwnerFullAccess", "Effect": "Allow", "Principal": { "AWS": ["<SERVICE_USER_ID>"] },
       "Action": "s3:*", "Resource": ["arn:aws:s3:::<BUCKET>", "arn:aws:s3:::<BUCKET>/*"] },
-    { "Sid": "PublicRead", "Effect": "Allow", "Principal": { "AWS": ["*"] },
-      "Action": "s3:GetObject", "Resource": "arn:aws:s3:::<BUCKET>/*" }
+    { "Sid": "AppObjects", "Effect": "Allow", "Principal": { "AWS": ["<APP_USER_ID>"] },
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], "Resource": "arn:aws:s3:::<BUCKET>/*" }
   ]
 }
 ```
 
-`<SERVICE_USER_ID>` — id сервисного пользователя в IAM (в Pulumi — `IamServiceuserV1.id`). Формат
-`Principal` для конкретного пользователя документация Selectel описывает только словами
-(«идентификаторы пользователей») — проверять на тестовом бакете.
+`<SERVICE_USER_ID>`, `<APP_USER_ID>` — id сервисных пользователей в IAM (в Pulumi —
+`IamServiceuserV1.id`), формат `{ "AWS": ["<id>"] }` проверен.
+
+**Политика действует только на авторизованные запросы.** `Principal` `"*"` и `{ "AWS": ["*"] }` —
+«все авторизованные», а не «все»: правило `PublicRead` с `s3:GetObject` для `*` анонимного чтения не
+открывает. Анонимный `GET` через S3 API (`s3.<POOL>.storage.selcloud.ru/<BUCKET>/<ключ>` и
+`<BUCKET>.s3.<POOL>.storage.selcloud.ru/<ключ>`) отвечает `403 AccessDenied` при любой политике и
+любом типе бакета. Анонимное чтение даёт только тип бакета `public` — по публичному домену
+`<uuid>.selstorage.ru` («Публичный бакет и свой домен»); политика на него не влияет, домен отдаёт
+объекты и без правила для `*` (проверено: то же правило убрано — домен `200`, endpoint `403`).
+
+Приложению — отдельный сервисный пользователь с ролью `s3.bucket.user` и свой S3-ключ, а не ключ
+пользователя стека (у того `member` на весь проект). С этой ролью доступа нет нигде, пока id
+пользователя не назван в политике бакета: в остальных бакетах проекта и на `ListBuckets` он получает
+`AccessDenied`. Листинг объектов — отдельным правилом `s3:ListBucket` на сам бакет (без `/*`).
+
+Перевыпуск ключа (утечка): случайная строка вместо ключа не годится — приложение получит
+`InvalidAccessKeyId`, а утёкший ключ останется рабочим. В Pulumi — `pulumi up --replace <urn>` для
+`IamS3CredentialsV1` (URN — `pulumi stack --show-urns`), новые значения — в хранилище секретов
+выкатки, затем запросом со старым ключом убедиться, что он отвечает `InvalidAccessKeyId`.
 
 ### Pulumi
 
@@ -555,8 +575,8 @@ curl -sS -X POST "https://api.<POOL>.storage.selcloud.ru/v2/hello/init" -H "X-Au
 ### Публичный бакет и свой домен
 
 Тип бакета (`private`/`public`) — не S3 API: ACL и Public Access Block Selectel не поддерживает, а
-политика бакета с публичным `GetObject` открывает чтение через S3 API, но не делает бакет публичным.
-Тип — через API управления хранилищем пула с project-токеном:
+политика бакета анонимного чтения не открывает вовсе («Политика бакета»). Тип — через API управления
+хранилищем пула с project-токеном:
 
 ```bash
 # текущие настройки; general.type — public/private
@@ -568,8 +588,13 @@ curl -sS -X PUT https://api.<POOL>.storage.selcloud.ru/v2/containers/<BUCKET>/op
 curl -sS https://api.<POOL>.storage.selcloud.ru/v2/containers/<BUCKET>/pubdomains -H "X-Auth-Token: <TOKEN>"
 ```
 
-Публичный бакет читается без авторизации по `https://<uuid>.selstorage.ru/<ключ>`; только он годится
-источником CDN и для своего домена. Свой домен — `PUT .../containers/<BUCKET>/domains` с
+У приватного бакета `pubdomains` отвечает `204` с пустым телом, а не `[]` и не `404`: сначала код
+ответа (`404`/`204` — домена нет, не-2xx — ошибка), потом пустое тело, и только потом разбор JSON.
+Иначе чтение состояния приватного бакета падает на `JSON.parse` — в Pulumi это ломает `refresh`
+всего стека, хотя `up` проходит (`read` он не вызывает).
+
+Публичный бакет читается без авторизации по `https://<uuid>.selstorage.ru/<ключ>` — и только так:
+через endpoint S3 анонимно `403`. Только он годится источником CDN и для своего домена. Свой домен — `PUT .../containers/<BUCKET>/domains` с
 `{"domain_name": "<домен без точки>"}`. Selectel проверяет, что домен — CNAME на
 `access.<POOL>.storage.selcloud.ru`: ALIAS отвергается (`422 domain_cname_invalid`), поэтому домен —
 не вершина зоны (например `static.example.ru` записью в зоне `example.ru.`); свежий CNAME — повтор с

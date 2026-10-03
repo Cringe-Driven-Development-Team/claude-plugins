@@ -45,7 +45,8 @@ description: Pulumi-программы на TypeScript в репозитория
 понятной ошибкой вместо позднего 401. Побочные эффекты (сетевые вызовы, ожидание) внутри `apply` —
 под `if (pulumi.runtime.isDryRun()) return …;`, иначе они выполняются и на `preview`. Опции ресурсов —
 `protect`, `deleteBeforeReplace`, `ignoreChanges`, временный `import`, `aliases` при переименовании.
-API без провайдера — dynamic-ресурс с учёткой из `process.env`, не побочный эффект в `apply`.
+API без провайдера — dynamic-ресурс с учёткой из `process.env`, не побочный эффект в `apply`; его
+код лежит в стейте, `diff` сравнивает и `__provider`, иначе правка провайдера до `refresh` не доходит.
 Явный провайдер на учётке, создаваемой стеком, — через `id` этой учётки. Общая теория `Output`/`apply()` и компонентов — скилл `pulumi-best-practices`. REFERENCE §2–§3.
 
 ## Тесты
@@ -83,6 +84,8 @@ passphrase стеков — длинная случайная (REFERENCE §7). �
 | `401` у провайдера на `preview` при частичном стейте | провайдер настроен на ещё не созданного пользователя | вход провайдера через `id` пользователя (REFERENCE §2) |
 | `failed to load checkpoint: ... unexpected end of JSON input` | запись стейта прервана, файл стека пустой | ничего не запускать; скопировать `<стек>.json.bak` поверх (REFERENCE §5) |
 | `refresh` падает `not found` на удалённом вне Pulumi ресурсе | провайдер не сообщает «ресурса нет» | `pulumi state delete <urn>` (REFERENCE §5) |
+| `refresh` падает той же ошибкой dynamic-ресурса после исправления кода, `preview` — `unchanged` | код провайдера исполняется из стейта, `diff` не видит его смену | сравнивать `__provider` в `diff`, затем `up` (REFERENCE §2) |
+| `unable to delete resource … marked for protection`, `destroy` ничего не удалил | `protect` проверяется на плане, до любых удалений | `destroy --exclude-protected`; совсем — `state unprotect` и `destroy` (REFERENCE §3) |
 | новый ресурс конфликтует со старым, удаляемым в том же `up` | удаления идут после создания | `destroy --target` старого, потом `up` (REFERENCE §3) |
 | `Missing required configuration variable` | не задан конфиг стека | `pulumi config set`; в тестах — `setAllConfig` |
 | `Response has no supported checksum` | S3-совместимое хранилище без контрольных сумм | норма, не ошибка |
