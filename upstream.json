@@ -2,7 +2,7 @@
   "sources": {
     "pulumi-agent-skills": {
       "repo": "pulumi/agent-skills",
-      "commit": "9b794aec9c4169f137285c2763c06064d247dd47",
+      "commit": "e2aa9b83fdb15269965ee5d58eadae6773d98a63",
       "license": "LICENSE"
     },
     "dirien": {
